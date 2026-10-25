@@ -1,6 +1,7 @@
 // =============================================================================
-// Lovelace 3D Printer Card  v1.0.0
-// A HACS-installable Home Assistant Lovelace card for Moonraker-based printers.
+// Lovelace 3D Printer Card  v1.1.0
+// A HACS-installable Home Assistant Lovelace card for Moonraker/Klipper, OctoPrint
+// and PrusaLink printers — including the multi-tool Prusa XL.
 //
 // Install via HACS or manually:
 //   Place this file in:  /config/www/lovelace-3d-printer-card/lovelace-3d-printer-card.js
@@ -11,7 +12,11 @@
 //   type: custom:lovelace-3d-printer-card
 //   name: My Printer
 //   base_entity: voron_24
-//   printer_type: i3          # i3 | corexy | cantilever
+//   printer_type: i3          # i3 | corexy | corexy-flying-gantry | cantilever | prusa-xl
+//   entity_mappings: en_octoprint   # optional; auto-detected for OctoPrint/PrusaLink
+//   tool_count: 5             # optional; multi-tool printers
+//   active_tool: sensor.x     # optional; entity reporting the active tool (1-5 or T0-T4)
+//   exclude: [sensor.x, ...]  # optional; entities to leave off the card
 //
 // All entity IDs are auto-derived from base_entity, with optional overrides:
 //   entities:
@@ -101,6 +106,12 @@ const DEFAULT_UI = {
   cameras: 'Cameras',
   camera_fallback: 'Camera',
   home_all: 'All',
+  continue: 'Continue',
+  material: 'Material',
+  tools: 'Tools',
+  tool: 'Tool',
+  bed_segments: 'Bed segments',
+  other_sensors: 'Other sensors',
 };
 
 // ── State colours ─────────────────────────────────────────────────────────────
@@ -122,6 +133,11 @@ const STATE_COLORS = {
   'offline':    '#757575',
   'unknown':    '#757575',
   'off':        '#4a4a4a',
+  // PrusaLink states
+  'finished':   '#4caf50',
+  'stopped':    '#f44336',
+  'attention':  '#ff9800',
+  'busy':       '#42a5f5',
 };
 
 function stateColor(status) {
@@ -191,7 +207,7 @@ function fmtETA(remainingSecs) {
 
 function truncate(str, maxLen = 22) {
   if (!str) return '';
-  const base = str.replace(/\.gcode$/i, '');
+  const base = str.replace(/\.b?gcode$/i, '');
   if (base.length <= maxLen) return base;
   return base.slice(0, maxLen - 1) + '…';
 }
@@ -211,17 +227,22 @@ function numVal(hass, entityId) {
   return isNaN(n) ? null : n;
 }
 
-function durationVal(hass, entityId) {
+// mode 'remaining': future timestamp → seconds until it (print_eta, PrusaLink print_finish)
+// mode 'elapsed':   past timestamp → seconds since it (PrusaLink print_start)
+function durationVal(hass, entityId, mode = 'remaining') {
   const v = stVal(hass, entityId);
   if (v == null) return null;
   const deviceClass = attrVal(hass, entityId, 'device_class') || '';
   const unit = (attrVal(hass, entityId, 'unit_of_measurement') || '').toLowerCase();
   const s = String(v).trim();
 
-  // Timestamp (print_eta): ISO date → seconds from now until that time
-  if (deviceClass === 'timestamp' && /^\d{4}-\d{2}-\d{2}T/.test(s)) {
+  if (deviceClass === 'timestamp' || /^\d{4}-\d{2}-\d{2}T/.test(s)) {
     const t = new Date(s).getTime();
-    if (!isNaN(t)) return Math.max(0, (t - Date.now()) / 1000);
+    if (!isNaN(t)) {
+      return mode === 'elapsed'
+        ? Math.max(0, (Date.now() - t) / 1000)
+        : Math.max(0, (t - Date.now()) / 1000);
+    }
   }
 
   const n = parseFloat(v);
@@ -515,7 +536,95 @@ function svgPrinterCantilever(progress, hotendOn, bedOn, chamberOn, isPrinting, 
 </svg>`;
 }
 
-function renderPrinterSVG(printerType, progress, hotendTarget, bedTarget, chamberTarget, isPrinting, nozzleX) {
+// Prusa XL: CoreXY, bed moves down in Z, tool-changer docks along the top.
+// toolCount 1–5; activeTool is a 0-based index (the dock drawn empty, tool shown on carriage),
+// or -1 when no tool is picked (all docks full, bare carriage).
+function svgPrinterPrusaXL(progress, hotendOn, bedOn, chamberOn, isPrinting, nozzleX, toolCount = 5, activeTool = 0) {
+  const W = 200, H = 180;
+  const frameColor = 'var(--primary-text-color)';
+  const accentColor = 'var(--mode-color)';
+  const frameLeft = 18, frameRight = 182, frameTop = 12, frameBottom = 162;
+  const n = Math.min(5, Math.max(1, Math.round(toolCount || 5)));
+  const active = (activeTool != null && activeTool >= 0 && activeTool < n) ? activeTool : -1;
+
+  // Tool docks along the top beam
+  const dockY = frameTop + 4;
+  const dockSpan = frameRight - frameLeft - 30;
+  const dockStep = n > 1 ? dockSpan / (n - 1) : 0;
+  const dockX0 = n > 1 ? frameLeft + 15 : W / 2;
+  let docks = '';
+  for (let i = 0; i < n; i++) {
+    const x = dockX0 + i * dockStep;
+    const parked = i !== active;
+    docks += `<rect x="${x - 8}" y="${dockY}" width="16" height="4" rx="1" fill="${frameColor}" opacity="0.35"/>`;
+    if (parked) {
+      docks += `<rect x="${x - 6}" y="${dockY + 4}" width="12" height="9" rx="2" fill="${accentColor}" opacity="0.45"/>`
+             + `<polygon points="${x - 3},${dockY + 13} ${x + 3},${dockY + 13} ${x},${dockY + 18}" fill="${accentColor}" opacity="0.45"/>`;
+    } else {
+      docks += `<rect x="${x - 6}" y="${dockY + 4}" width="12" height="9" rx="2" fill="none" stroke="${accentColor}" stroke-width="1" opacity="0.4" stroke-dasharray="2 2"/>`;
+    }
+    docks += `<text x="${x}" y="${dockY - 2}" text-anchor="middle" font-size="6" font-family="'Share Tech Mono',monospace" fill="${frameColor}" opacity="${i === active ? 0.9 : 0.4}">${i + 1}</text>`;
+  }
+
+  const gantryY = 48;
+  const bedW = 112;
+  const bedX = (W - bedW) / 2;
+  const bedH = 10;
+  const objMaxH = 70;
+  const objH = Math.max(4, objMaxH * progress);
+  const filled = Math.round(progress * 12);
+  const bedYTop = 70;
+  const bedY = bedYTop + (filled > 0 ? objH * filled / 12 : 0);
+  const objY = bedY - objH;
+  const objW = 56;
+  const objX = W / 2 - objW / 2;
+  const nozzleXPos = 50 + (nozzleX ?? 0.5) * 100;
+  const hasTool = active >= 0;
+  const tipY = gantryY + (hasTool ? 18 : 8);
+
+  const hotendGlow = hotendOn && hasTool
+    ? `<circle cx="${nozzleXPos}" cy="${tipY}" r="5" fill="#ff8c00" opacity="0.5"><animate attributeName="opacity" values="0.5;0.9;0.5" dur="2s" repeatCount="indefinite"/></circle>`
+    : '';
+  const bedGlow = bedOn
+    ? `<ellipse cx="${bedX + bedW / 2}" cy="${bedY + bedH / 2}" rx="${bedW / 2 + 4}" ry="8" fill="#ff8c00" opacity="0.35"><animate attributeName="opacity" values="0.35;0.6;0.35" dur="2.5s" repeatCount="indefinite"/></ellipse>`
+    : '';
+  const chamberGlow = chamberOn
+    ? `<rect x="${frameLeft - 8}" y="${frameTop - 8}" width="${frameRight - frameLeft + 16}" height="${frameBottom - frameTop + 16}" rx="8" fill="#ff8c00" opacity="0.08"><animate attributeName="opacity" values="0.08;0.18;0.08" dur="3s" repeatCount="indefinite"/></rect>`
+    : '';
+  const objectLines = progress > 0 ? _buildObject(progress, objH, objW - 4) : '';
+  // Bed is segmented on the XL (4×4 heater tiles) — hint with dividers
+  const segLines = [1, 2, 3].map(k => {
+    const x = bedX + (bedW / 4) * k;
+    return `<line x1="${x}" y1="${bedY + 1}" x2="${x}" y2="${bedY + bedH - 3}" stroke="${frameColor}" stroke-width="0.6" opacity="0.35"/>`;
+  }).join('');
+  const toolOnCarriage = hasTool
+    ? `<rect x="-6" y="7" width="12" height="7" rx="2" fill="${accentColor}" opacity="0.9"/><polygon points="-4,14 4,14 0,${18 + 0}" fill="${hotendOn ? '#ff8c00' : accentColor}" opacity="${hotendOn ? '1' : '0.75'}"/>`
+    : '';
+
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;color:${accentColor};overflow:visible">
+  ${chamberGlow}
+  <rect x="${frameLeft}" y="${frameTop}" width="${frameRight - frameLeft}" height="${frameBottom - frameTop}" rx="4" fill="none" stroke="${frameColor}" stroke-width="2.5" opacity="0.35"/>
+  <line x1="${frameLeft}" y1="${dockY}" x2="${frameRight}" y2="${dockY}" stroke="${frameColor}" stroke-width="2" opacity="0.3"/>
+  ${docks}
+  <line x1="${frameLeft + 6}" y1="${gantryY}" x2="${frameRight - 6}" y2="${gantryY}" stroke="${frameColor}" stroke-width="4" opacity="0.6" stroke-linecap="round"/>
+  <circle cx="${frameLeft + 9}" cy="${gantryY}" r="5" fill="none" stroke="${frameColor}" stroke-width="1.5" opacity="0.4"/>
+  <circle cx="${frameRight - 9}" cy="${gantryY}" r="5" fill="none" stroke="${frameColor}" stroke-width="1.5" opacity="0.4"/>
+  <line x1="${bedX + 14}" y1="${bedY + bedH}" x2="${bedX + 14}" y2="${frameBottom}" stroke="${frameColor}" stroke-width="1.5" opacity="0.3" stroke-dasharray="4 3"/>
+  <line x1="${bedX + bedW - 14}" y1="${bedY + bedH}" x2="${bedX + bedW - 14}" y2="${frameBottom}" stroke="${frameColor}" stroke-width="1.5" opacity="0.3" stroke-dasharray="4 3"/>
+  ${bedGlow}
+  <rect x="${bedX - 4}" y="${bedY}" width="${bedW + 8}" height="${bedH}" rx="3" fill="${frameColor}" opacity="0.25"/>
+  <rect x="${bedX}" y="${bedY}" width="${bedW}" height="${bedH - 2}" rx="2" fill="${bedOn ? '#ff8c00' : accentColor}" opacity="${bedOn ? '0.7' : '0.4'}"/>
+  ${segLines}
+  <g transform="translate(${objX}, ${objY})" style="color:${accentColor}">${objectLines}</g>
+  ${hotendGlow}
+  <g transform="translate(${nozzleXPos}, ${gantryY - 7})">
+    <rect x="-11" y="0" width="22" height="9" rx="3" fill="${accentColor}" opacity="0.85"/>
+    ${toolOnCarriage}
+  </g>
+</svg>`;
+}
+
+function renderPrinterSVG(printerType, progress, hotendTarget, bedTarget, chamberTarget, isPrinting, nozzleX, opts = {}) {
   const isTargetSet = (t) => t != null && !isNaN(Number(t)) && Number(t) > 0;
   const hotendOn = isTargetSet(hotendTarget);
   const bedOn = isTargetSet(bedTarget);
@@ -529,6 +638,10 @@ function renderPrinterSVG(printerType, progress, hotendTarget, bedTarget, chambe
     case 'corexy': return svgPrinterCoreXY(p, hotendOn, bedOn, chamberOn, isPrinting, nx);
     case 'corexy-flying-gantry': return svgPrinterCoreXYFlyingGantry(p, hotendOn, bedOn, chamberOn, isPrinting, nx);
     case 'cantilever': return svgPrinterCantilever(p, hotendOn, bedOn, chamberOn, isPrinting, nx);
+    case 'prusa-xl':
+    case 'prusa_xl':
+    case 'toolchanger':
+      return svgPrinterPrusaXL(p, hotendOn, bedOn, chamberOn, isPrinting, nx, opts.toolCount ?? 5, opts.activeTool ?? -1);
     default: return svgPrinterI3(p, hotendOn, bedOn, chamberOn, isPrinting, nx);
   }
 }
@@ -559,6 +672,10 @@ class PrinterCard3D extends HTMLElement {
     this._macros = [];
     this._heaters = [];
     this._fans = [];
+    this._tools = [];
+    this._toolsDetected = 0;
+    this._bedSegments = [];
+    this._serviceButtons = [];
     this._openSheet = null;
     this._confirmEmergency = false;
     this._confirmTimer = null;
@@ -584,7 +701,9 @@ class PrinterCard3D extends HTMLElement {
 
   setConfig(config) {
     if (!config.base_entity) throw new Error('lovelace-3d-printer-card: base_entity is required');
-    this._config = config;
+    // Tolerate "prusa_xl_" or "sensor.prusa_xl" — the crawler needs the bare prefix.
+    const base = String(config.base_entity).trim().replace(/^[a-z_]+\./, '').replace(/_+$/, '');
+    this._config = { ...config, base_entity: base };
     if (!this.shadowRoot.innerHTML) this._initialRender();
   }
 
@@ -612,8 +731,19 @@ class PrinterCard3D extends HTMLElement {
   }
 
   _resolveEntityMappingsKey() {
-    return this._config?.entity_mappings ||
-      (this._hass?.locale?.language || this._hass?.language || 'en') + '_generic';
+    if (this._config?.entity_mappings) return this._config.entity_mappings;
+    const lang = this._hass?.locale?.language || this._hass?.language || 'en';
+    return `${lang}_${this._detectIntegration()}`;
+  }
+
+  // Guess which integration provides the printer from tell-tale entity IDs.
+  _detectIntegration() {
+    const s = this._hass?.states;
+    const b = this._config?.base_entity;
+    if (!s || !b) return 'generic';
+    if (s[`button.${b}_stop_job`] || s[`sensor.${b}_current_state`] || s[`sensor.${b}_job_percentage`]) return 'octoprint';
+    if (s[`button.${b}_cancel_job`] || s[`sensor.${b}_heatbed_temperature`] || s[`camera.${b}_preview`]) return 'prusalink';
+    return 'generic';
   }
 
   _loadEntityMappings(key) {
@@ -624,16 +754,17 @@ class PrinterCard3D extends HTMLElement {
       .catch(() => this._loadEntityMappingsFallback(key));
   }
 
+  // Fallback chain for "<lang>_<variant>":
+  //   en_<variant> → <lang>_generic → en_generic → built-in defaults
   _loadEntityMappingsFallback(key) {
-    const lang = key.split('_')[0];
-    const enUrl = new URL('./entities/en_generic.js', import.meta.url).href;
-    if (lang === 'en') {
-      return import(/* webpackIgnore: true */ enUrl).then((m) => m.default).catch(() => DEFAULT_MAPPINGS);
-    }
-    const langUrl = new URL(`./entities/${lang}_generic.js`, import.meta.url).href;
-    return import(/* webpackIgnore: true */ langUrl)
-      .then((m) => m.default)
-      .catch(() => import(/* webpackIgnore: true */ enUrl).then((m) => m.default).catch(() => DEFAULT_MAPPINGS));
+    const [lang, ...rest] = key.split('_');
+    const variant = rest.join('_') || 'generic';
+    const url = (k) => new URL(`./entities/${k}.js`, import.meta.url).href;
+    const chain = [...new Set([`en_${variant}`, `${lang}_generic`, 'en_generic'])].filter(k => k !== key);
+    const tryNext = (i) => i >= chain.length
+      ? Promise.resolve(DEFAULT_MAPPINGS)
+      : import(/* webpackIgnore: true */ url(chain[i])).then((m) => m.default).catch(() => tryNext(i + 1));
+    return tryNext(0);
   }
 
   _t(key) {
@@ -655,6 +786,7 @@ class PrinterCard3D extends HTMLElement {
       if (fn) {
         return fn
           .replace(devicePrefix, '')
+          .replace(/^(octoprint\s+)?actual\s+/i, '')
           .replace(/\s+temperature$/i, '')
           .replace(/\s+temp$/i, '')
           .trim();
@@ -692,13 +824,35 @@ class PrinterCard3D extends HTMLElement {
     // Second pass handles remaining temp sensors and fans (need to know claimed targets).
     const remainingSensors = []; // [id, st, suffix] for unclaimed temp sensors
 
+    // Integration-specific extras from the mapping file
+    const ignoreRes = (m.ignore || []).map(p => new RegExp(p));
+    const toolCfg = m.tools || null;
+    const toolActualRe = toolCfg ? new RegExp('^' + toolCfg.actual.replace('{n}', '(\\d+)') + '$') : null;
+    const segCfg = m.bed_segments || null;
+    const segRe = segCfg ? new RegExp('^' + segCfg.replace('{x}', '(\\d+)').replace('{y}', '(\\d+)') + '$') : null;
+    const toolActuals = {};   // index → sensor id
+    const bedSegments = [];   // { x, y, entity_id }
+
+    const exclude = new Set(this._config.exclude || []);
+
     for (const [id, st] of Object.entries(this._hass.states)) {
       if (!id.includes(b)) continue;
-      // Skip hidden entities
-      if (st.attributes?.hidden === true) continue;
+      // Skip hidden / user-excluded entities
+      if (st.attributes?.hidden === true || exclude.has(id)) continue;
 
       const domain = id.split('.')[0];
-      const suffix = id.replace(/^[^.]+\./, '').replace(new RegExp(`^${b}_`), '');
+      const bare = id.replace(/^[^.]+\./, '');
+      // "@device" = entity named after the device itself, e.g. sensor.prusa_xl (PrusaLink state)
+      const suffix = bare === b ? '@device' : bare.replace(new RegExp(`^${b}_`), '');
+
+      if (domain === 'sensor' && toolActualRe) {
+        const tm = suffix.match(toolActualRe);
+        if (tm) { toolActuals[parseInt(tm[1], 10)] = id; continue; }
+      }
+      if (domain === 'sensor' && segRe) {
+        const sm = suffix.match(segRe);
+        if (sm) { bedSegments.push({ x: parseInt(sm[1], 10), y: parseInt(sm[2], 10), entity_id: id }); continue; }
+      }
 
       if (domain === 'sensor') {
         const role = matchRole(suffix, SENSOR_ROLES);
@@ -708,6 +862,8 @@ class PrinterCard3D extends HTMLElement {
           const isNewGood = st.state !== 'unknown' && st.state !== 'unavailable';
           if (!existing) {
             if (isNewGood) this._entities[role] = id;
+          } else if (existing.startsWith('number.')) {
+            // keep the settable number entity
           } else {
             const existingSt = this._hass.states[existing];
             const isExistingBad = !existingSt || existingSt.state === 'unknown' || existingSt.state === 'unavailable';
@@ -717,7 +873,7 @@ class PrinterCard3D extends HTMLElement {
               || (role === 'eta' && id.includes('print_time_left') && existing.includes('print_eta'));
             if ((isExistingBad && isNewGood) || preferNew) this._entities[role] = id;
           }
-        } else {
+        } else if (!ignoreRes.some(re => re.test(suffix))) {
           // Collect unclaimed temp sensors for second pass
           const unit = st.attributes?.unit_of_measurement;
           if (unit === '°C' || unit === '°F') remainingSensors.push([id, st, suffix]);
@@ -726,7 +882,9 @@ class PrinterCard3D extends HTMLElement {
       } else if (domain === 'number') {
         const role = matchRole(suffix, NUMBER_ROLES);
         if (role) {
-          if (!this._entities[role]) this._entities[role] = id;
+          // A settable number beats a read-only sensor for the same role (e.g. OctoPrint targets)
+          const existing = this._entities[role];
+          if (!existing || !existing.startsWith('number.')) this._entities[role] = id;
         }
         // Fans/outputs handled in second pass
 
@@ -756,6 +914,56 @@ class PrinterCard3D extends HTMLElement {
     // Sort macros by label
     this._macros.sort((a, b) => a.label.localeCompare(b.label));
     this._serviceButtons.sort((a, b) => a.label.localeCompare(b.label));
+
+    // ── Tools (multi-extruder / tool-changer, e.g. Prusa XL over OctoPrint) ──
+    this._tools = [];
+    this._toolsDetected = 0;
+    if (toolCfg) {
+      const S = this._hass.states;
+      const idxs = Object.keys(toolActuals).map(Number).sort((a, b2) => a - b2);
+      for (const i of idxs) {
+        const actualId = toolActuals[i];
+        const numSuffix = i === 0 ? toolCfg.target_number_first : toolCfg.target_number.replace('{n}', String(i));
+        const numId = numSuffix ? `number.${b}_${numSuffix}` : null;
+        const tgtSensorId = toolCfg.target_sensor ? `sensor.${b}_${toolCfg.target_sensor.replace('{n}', String(i))}` : null;
+        const targetId = (numId && S[numId]) ? numId : ((tgtSensorId && S[tgtSensorId]) ? tgtSensorId : null);
+        if (targetId) tempTargetIds.add(targetId);
+        const current = numVal(this._hass, actualId);
+        const target = targetId ? numVal(this._hass, targetId) : null;
+        this._tools.push({
+          index: i,
+          label: `${this._t('tool')} ${i + 1}`,
+          entity_id: actualId,
+          target_entity: targetId,
+          writable: !!targetId && targetId.startsWith('number.'),
+          current,
+          target,
+          min_temp: parseFloat(S[targetId]?.attributes?.min ?? 0),
+          max_temp: parseFloat(S[targetId]?.attributes?.max ?? 300),
+        });
+      }
+      this._toolsDetected = this._tools.length;
+      // Limit to the configured tool count, otherwise hide tools that report no reading
+      // (an empty XL tool slot reports 0 °C or nothing at all).
+      const cfgCount = parseInt(this._config.tool_count, 10);
+      if (cfgCount > 0) {
+        this._tools = this._tools.slice(0, cfgCount);
+      } else {
+        const present = this._tools.filter(t => t.current != null && t.current > 0);
+        if (present.length) this._tools = present;
+      }
+      // Tool 0 doubles as the generic hotend if nothing else claimed it
+      const t0 = this._tools.find(t => t.index === 0) || this._tools[0];
+      if (t0) {
+        if (!this._entities.hotend) this._entities.hotend = t0.entity_id;
+        if (!this._entities.hotend_target && t0.target_entity) this._entities.hotend_target = t0.target_entity;
+      }
+    }
+
+    // ── Segmented heatbed (Prusa XL 4×4) ──
+    this._bedSegments = bedSegments
+      .map(s => ({ ...s, temp: numVal(this._hass, s.entity_id) }))
+      .sort((a, c) => (a.y - c.y) || (a.x - c.x));
 
     // Core temp entity IDs (already in stats bar — exclude from misc heaters list)
     const coreTemps = new Set([this._entities.hotend, this._entities.bed].filter(Boolean));
@@ -908,17 +1116,58 @@ class PrinterCard3D extends HTMLElement {
     const ps = this._config?.power_switch;
     if (ps && this._hass?.states[ps]?.state === 'off') return 'off';
     if (printerState === 'error' || printerState === 'shutdown' || printerState === 'startup') return printerState;
-    return printState || printerState || 'idle';
+    // Normalise raw strings like "Printing from SD" (older OctoPrint integration) to snake_case
+    const raw = printState || printerState || 'idle';
+    return raw.replace(/\s+/g, '_');
   }
 
+  // Printing-like states across Klipper, OctoPrint (printing_sd, starting, finishing…) and PrusaLink
   _isPrinting() {
     const s = this._effectiveStatus();
-    return s === 'printing';
+    return s.startsWith('printing') || s.startsWith('starting') || s === 'finishing' || s === 'resuming';
   }
 
   _isPaused() {
     const s = this._effectiveStatus();
-    return s === 'paused';
+    return s === 'paused' || s === 'pausing' || s === 'attention';
+  }
+
+  _statusLabel(status) {
+    const LABELS = {
+      printing_sd: 'Printing (SD)',
+      printing_from_sd: 'Printing (SD)',
+      printing_streaming: 'Sending to SD',
+      starting_sd: 'Starting (SD)',
+      offline_after_error: 'Offline (error)',
+      open_serial: 'Connecting',
+      detect_serial: 'Connecting',
+      transferring_file: 'Transferring',
+    };
+    if (LABELS[status]) return LABELS[status];
+    return status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ');
+  }
+
+  // Which tool to draw on the carriage. Config `active_tool` (entity whose state is 1-based
+  // "1".."5" or "T0".."T4") wins; otherwise the hottest tool with a target set.
+  _svgOpts() {
+    const toolCount = parseInt(this._config.tool_count, 10) || (this._tools.length || 5);
+    let activeTool = -1;
+    const at = this._config.active_tool;
+    if (at && this._hass?.states[at]) {
+      const raw = String(this._hass.states[at].state).trim();
+      const tm = raw.match(/^t(\d+)$/i);
+      let idx = -1;
+      if (tm) idx = parseInt(tm[1], 10);
+      else if (!isNaN(parseInt(raw, 10))) idx = parseInt(raw, 10) - 1;
+      const pos = this._tools.findIndex(t => t.index === idx);
+      activeTool = pos >= 0 ? pos : idx;
+    } else if (this._tools.length) {
+      const heated = this._tools.filter(t => t.target > 0).sort((a, b) => (b.current ?? 0) - (a.current ?? 0));
+      if (heated.length) activeTool = this._tools.indexOf(heated[0]);
+    } else if (this._isPrinting()) {
+      activeTool = 0;
+    }
+    return { toolCount, activeTool };
   }
 
   _isPowerOff() {
@@ -948,7 +1197,8 @@ class PrinterCard3D extends HTMLElement {
           this._numVal('bed_target'),
           this._numVal('chamber_target') ?? this._heaters.find(h => h.entity_id?.toLowerCase().includes('chamber'))?.target ?? null,
           true,
-          this._nozzleX
+          this._nozzleX,
+          this._svgOpts()
         );
       }
       this._animFrame = requestAnimationFrame(tick);
@@ -1072,7 +1322,7 @@ class PrinterCard3D extends HTMLElement {
   _htmlParts() {
     const cfg = this._config;
     const status = this._effectiveStatus();
-    const statusLabel = status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ');
+    const statusLabel = this._statusLabel(status);
     const progress = this._numVal('progress') || 0;
     const hotendTemp = this._numVal('hotend');
     const hotendTarget = this._numVal('hotend_target');
@@ -1080,7 +1330,7 @@ class PrinterCard3D extends HTMLElement {
     const bedTarget = this._numVal('bed_target');
     const chamberHeater = this._heaters.find(h => h.entity_id && h.entity_id.toLowerCase().includes('chamber'));
     const chamberTemp = chamberHeater?.current ?? null;
-    const durationSecs = durationVal(this._hass, this._entities.duration) ?? this._numVal('duration');
+    const durationSecs = durationVal(this._hass, this._entities.duration, 'elapsed') ?? this._numVal('duration');
     const currentLayer = this._numVal('current_layer');
     const totalLayers = this._numVal('total_layers');
     const filename = this._stVal('filename');
@@ -1126,9 +1376,20 @@ class PrinterCard3D extends HTMLElement {
     const cameras = this._cameras;
     const camCount = cameras.length;
 
+    const multiTool = this._tools.length > 1;
+    const material = this._stVal('material');
+    // Only number entities can be set; PrusaLink/OctoPrint target sensors are read-only
+    const isWritable = (role) => !!this._entities[role]?.startsWith('number.') && this._entityExists(role);
+    const fanRpms = [['fan_hotend', 'Hotend fan'], ['fan_print', 'Print fan']]
+      .filter(([role]) => this._entityExists(role))
+      .map(([role, lbl]) => ({ label: lbl, value: this._numVal(role), unit: attrVal(this._hass, this._entities[role], 'unit_of_measurement') || 'rpm' }));
+    const hasHomeButtons = this._entityExists('home_all') || this._entityExists('home_x') || this._entityExists('home_y') || this._entityExists('home_z');
+    const canJog = !!(this._hass.services?.moonraker?.send_gcode || this._hass.services?.klipper?.send_gcode
+      || this._hass.states[`script.${this._config.base_entity}_jog`]);
     const hasMacros = this._macros.length > 0;
-    const hasMovement = this._entityExists('home_all') || this._entityExists('home_x') || this._entityExists('position_x');
-    const hasMisc = this._heaters.length > 0 || this._fans.length > 0 || this._entityExists('hotend') || this._entityExists('bed');
+    const hasMovement = hasHomeButtons || canJog || this._entityExists('position_x') || this._entityExists('position_z');
+    const hasMisc = this._heaters.length > 0 || this._fans.length > 0 || this._tools.length > 0 || this._bedSegments.length > 0
+      || fanRpms.length > 0 || this._entityExists('hotend') || this._entityExists('bed');
     const hasSystem = this._entityExists('fw_restart') || this._entityExists('host_restart') || this._entityExists('server_restart') || this._entityExists('host_shutdown') || this._entityExists('klipper_restart') || this._serviceButtons.length > 0;
 
     // Power switch (optional config entity)
@@ -1189,14 +1450,24 @@ class PrinterCard3D extends HTMLElement {
       <!-- Printer SVG -->
       <div class="printer-section">
         <div class="printer-svg-wrap${this._isPowerOff() ? ' printer-off' : ''}">
-          ${renderPrinterSVG(cfg.printer_type, progress, hotendTarget, bedTarget, this._numVal('chamber_target') ?? chamberHeater?.target ?? null, isPrinting, this._nozzleX)}
+          ${renderPrinterSVG(cfg.printer_type, progress, hotendTarget, bedTarget, this._numVal('chamber_target') ?? chamberHeater?.target ?? null, isPrinting, this._nozzleX, this._svgOpts())}
           ${this._isPowerOff() ? `<div class="printer-off-overlay"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="currentColor" opacity="0.5"><path d="M16.56 5.44l-1.45 1.45A6.97 6.97 0 0 1 17 12a5 5 0 0 1-5 5 5 5 0 0 1-5-5c0-2.04 1.1-3.8 2.71-4.77L8.27 5.79A8.97 8.97 0 0 0 5 12a7 7 0 0 0 7 7 7 7 0 0 0 7-7c0-2.57-1.36-4.81-3.44-6.11zM13 3h-2v10h2V3z"/></svg></div>` : ''}
         </div>
       </div>
 
       <!-- Stats bar -->
       <div class="stats-bar">
-        ${hotendStr ? `<div class="stat-item">
+        ${multiTool ? this._tools.map(t => {
+          const cur = t.current != null ? Math.round(t.current) + '°' : '—';
+          const val = t.target ? `${t.current != null ? Math.round(t.current) : '—'}/${Math.round(t.target)}°` : cur;
+          const hot = t.target > 0;
+          return `<div class="stat-item stat-tool ${hot ? '' : 'stat-dim'}">
+          <span class="stat-icon">${ICON_HOTEND}</span>
+          <span class="stat-val hotend-val">${val}</span>
+          <span class="stat-label">${t.label}</span>
+        </div>`;
+        }).join('') : ''}
+        ${!multiTool && hotendStr ? `<div class="stat-item">
           <span class="stat-icon">${ICON_HOTEND}</span>
           <span class="stat-val hotend-val">${hotendStr}</span>
           <span class="stat-label">${this._t('hotend')}</span>
@@ -1224,6 +1495,11 @@ class PrinterCard3D extends HTMLElement {
           <span class="stat-icon">${ICON_FLOW}</span>
           <span class="stat-val">${fmtPct(flowFactor)}</span>
           <span class="stat-label">${this._t('flow')}</span>
+        </div>` : ''}
+        ${material && material !== '---' ? `<div class="stat-item">
+          <span class="stat-icon">${ICON_SPOOL}</span>
+          <span class="stat-val">${material}</span>
+          <span class="stat-label">${this._t('material')}</span>
         </div>` : ''}
       </div>
 
@@ -1279,7 +1555,8 @@ class PrinterCard3D extends HTMLElement {
       <!-- Print controls (only when print is running) -->
       ${isActive && (hasPause || hasResume || hasCancel) ? `<div class="controls controls-print">
         ${isPrinting && hasPause ? `<button class="ctrl-btn ctrl-pause" data-action="pause">${ICON_PAUSE} ${this._t('pause')}</button>` : ''}
-        ${isPaused && hasResume ? `<button class="ctrl-btn ctrl-resume" data-action="resume">${ICON_PLAY} ${this._t('resume')}</button>` : ''}
+        ${isPaused && status === 'attention' && this._entityExists('continue') ? `<button class="ctrl-btn ctrl-resume" data-action="continue">${ICON_PLAY} ${this._t('continue')}</button>` : ''}
+        ${isPaused && status !== 'attention' && hasResume ? `<button class="ctrl-btn ctrl-resume" data-action="resume">${ICON_PLAY} ${this._t('resume')}</button>` : ''}
         ${hasCancel ? `<button class="ctrl-btn ctrl-cancel" data-action="cancel">${ICON_STOP} ${this._t('cancel')}</button>` : ''}
       </div>` : ''}
 
@@ -1319,14 +1596,14 @@ class PrinterCard3D extends HTMLElement {
           ${posZ != null ? `<div class="pos-item"><span class="pos-axis pos-z">Z</span><span class="pos-val mono">${posZ.toFixed(1)}</span></div>` : ''}
         </div>` : ''}
 
-        <div class="home-row ${movementDisabled ? 'disabled' : ''}">
+        ${hasHomeButtons ? `<div class="home-row ${movementDisabled ? 'disabled' : ''}">
           ${this._entityExists('home_all') ? `<button class="home-btn" data-action="home-axis" data-axis="all" ${movementDisabled ? 'disabled' : ''}>${ICON_HOME} ${this._t('home_all')}</button>` : ''}
           ${this._entityExists('home_x') ? `<button class="home-btn home-x" data-action="home-axis" data-axis="x" ${movementDisabled ? 'disabled' : ''}>X</button>` : ''}
           ${this._entityExists('home_y') ? `<button class="home-btn home-y" data-action="home-axis" data-axis="y" ${movementDisabled ? 'disabled' : ''}>Y</button>` : ''}
           ${this._entityExists('home_z') ? `<button class="home-btn home-z" data-action="home-axis" data-axis="z" ${movementDisabled ? 'disabled' : ''}>Z</button>` : ''}
-        </div>
+        </div>` : ''}
 
-        <div class="jog-section ${movementDisabled ? 'disabled' : ''}">
+        ${canJog ? `<div class="jog-section ${movementDisabled ? 'disabled' : ''}">
           <!-- XY jog cross -->
           <div class="jog-xy">
             <div class="jog-xy-top">
@@ -1349,9 +1626,9 @@ class PrinterCard3D extends HTMLElement {
             <div class="jog-z-sep"></div>
             ${[0.1,1,10].map(d => `<button class="jog-btn jog-z-btn" data-action="jog" data-axis="z" data-dist="-${d}" ${movementDisabled ? 'disabled' : ''}>-${d}</button>`).join('')}
           </div>
-        </div>
+        </div>` : ''}
 
-        ${this._entityExists('speed_factor') ? `<div class="tune-row" style="margin-top:12px">
+        ${isWritable('speed_factor') ? `<div class="tune-row" style="margin-top:12px">
           <div class="tune-row-header">
             <span class="tune-row-label">${ICON_SPEED} ${this._t('speed')}</span>
             <span class="tune-row-val mono" id="mv-speed-val">${fmtPct(speedFactor)}</span>
@@ -1370,11 +1647,11 @@ class PrinterCard3D extends HTMLElement {
 
           ${(this._heaters.length > 0 || this._entityExists('hotend') || this._entityExists('bed')) ? `
           <div class="temps-section-label">${this._t('temperatures')}</div>
-          ${this._entityExists('hotend') ? `<div class="temp-row">
+          ${!multiTool && this._entityExists('hotend') ? `<div class="temp-row">
             <div class="temp-row-info"><span class="temp-row-name">${this._t('hotend')}</span></div>
             <div class="temp-row-ctrl">
               <span class="temp-current mono">${hotendTemp != null ? hotendTemp.toFixed(1) + '°' : '—'}</span>
-              ${this._entityExists('hotend_target') ? `
+              ${isWritable('hotend_target') ? `
               <span class="temp-arrow">→</span>
               <input type="number" class="temp-input"
                 data-action="set-temp"
@@ -1386,11 +1663,30 @@ class PrinterCard3D extends HTMLElement {
               <span class="temp-unit">°C</span>` : ''}
             </div>
           </div>` : ''}
+          ${multiTool ? this._tools.map(t => `<div class="temp-row">
+            <div class="temp-row-info">
+              <span class="temp-row-name">${t.label}</span>
+              ${t.target > 0 ? `<span class="temp-row-state temp-state-active">on</span>` : ''}
+            </div>
+            <div class="temp-row-ctrl">
+              <span class="temp-current mono">${t.current != null ? t.current.toFixed(1) + '°' : '—'}</span>
+              ${t.writable ? `
+              <span class="temp-arrow">→</span>
+              <input type="number" class="temp-input"
+                data-action="set-temp"
+                data-entity="${t.entity_id}"
+                data-target-entity="${t.target_entity}"
+                min="${t.min_temp}" max="${t.max_temp}" step="1"
+                value="${t.target != null ? Math.round(t.target) : 0}"
+              />
+              <span class="temp-unit">°C</span>` : (t.target ? `<span class="temp-arrow">→</span><span class="temp-current mono">${Math.round(t.target)}°</span>` : '')}
+            </div>
+          </div>`).join('') : ''}
           ${this._entityExists('bed') ? `<div class="temp-row">
             <div class="temp-row-info"><span class="temp-row-name">${this._t('bed')}</span></div>
             <div class="temp-row-ctrl">
               <span class="temp-current mono">${bedTemp != null ? bedTemp.toFixed(1) + '°' : '—'}</span>
-              ${this._entityExists('bed_target') ? `
+              ${isWritable('bed_target') ? `
               <span class="temp-arrow">→</span>
               <input type="number" class="temp-input"
                 data-action="set-temp"
@@ -1402,7 +1698,7 @@ class PrinterCard3D extends HTMLElement {
               <span class="temp-unit">°C</span>` : ''}
             </div>
           </div>` : ''}
-          ${this._heaters.map(h => `<div class="temp-row">
+          ${this._heaters.filter(h => !h.readonly).map(h => `<div class="temp-row">
             <div class="temp-row-info">
               <span class="temp-row-name">${h.label}</span>
               ${h.state != null ? `<span class="temp-row-state ${h.state !== 'off' ? 'temp-state-active' : ''}">${h.state}</span>` : ''}
@@ -1420,6 +1716,35 @@ class PrinterCard3D extends HTMLElement {
               />
               <span class="temp-unit">°C</span>`}
             </div>
+          </div>`).join('')}
+          ${this._heaters.some(h => h.readonly) ? `<div class="temps-section-label" style="margin-top:14px">${this._t('other_sensors')}</div>` : ''}
+          ${this._heaters.filter(h => h.readonly).map(h => `<div class="temp-row">
+            <div class="temp-row-info">
+              <span class="temp-row-name">${h.label}</span>
+              ${h.state != null ? `<span class="temp-row-state ${h.state !== 'off' ? 'temp-state-active' : ''}">${h.state}</span>` : ''}
+            </div>
+            <div class="temp-row-ctrl">
+              <span class="temp-current mono">${h.current != null ? h.current.toFixed(1) + '°' : '—'}</span>
+              ${h.readonly ? '' : `
+              <span class="temp-arrow">→</span>
+              <input type="number" class="temp-input"
+                data-action="set-temp"
+                data-entity="${h.entity_id}"
+                data-target-entity="${h.target_entity || ''}"
+                min="${h.min_temp}" max="${h.max_temp}" step="1"
+                value="${h.target != null ? Math.round(h.target) : 0}"
+              />
+              <span class="temp-unit">°C</span>`}
+            </div>
+          </div>`).join('')}` : ''}
+
+          ${this._bedSegments.length > 0 ? this._bedHeatmapHtml() : ''}
+
+          ${fanRpms.length > 0 ? `
+          <div class="temps-section-label" style="margin-top:14px">${this._t('fans_outputs')}</div>
+          ${fanRpms.map(f => `<div class="temp-row">
+            <div class="temp-row-info"><span class="temp-row-name">${f.label}</span></div>
+            <div class="temp-row-ctrl"><span class="temp-current mono">${f.value != null ? Math.round(f.value) : '—'} ${f.unit}</span></div>
           </div>`).join('')}` : ''}
 
           ${this._fans.length > 0 ? `
@@ -1493,6 +1818,27 @@ class PrinterCard3D extends HTMLElement {
     return { main, cameras: camerasHtml };
   }
 
+  // Segmented heatbed (Prusa XL, 4×4 tiles) as a small heatmap. Back row on top.
+  _bedHeatmapHtml() {
+    const segs = this._bedSegments;
+    const xs = [...new Set(segs.map(s => s.x))].sort((a, b) => a - b);
+    const ys = [...new Set(segs.map(s => s.y))].sort((a, b) => b - a);
+    const byKey = Object.fromEntries(segs.map(s => [`${s.x}_${s.y}`, s]));
+    const temps = segs.map(s => s.temp).filter(t => t != null);
+    const avg = temps.length ? temps.reduce((a, b) => a + b, 0) / temps.length : null;
+    const cell = (s) => {
+      if (!s || s.temp == null) return `<div class="bed-cell bed-cell-na">—</div>`;
+      // 25 °C → cool, 110 °C → hot
+      const k = Math.min(1, Math.max(0, (s.temp - 25) / 85));
+      return `<div class="bed-cell" style="background:rgba(255,140,0,${(0.08 + k * 0.72).toFixed(2)})" title="${s.x},${s.y}: ${s.temp.toFixed(1)}°C">${Math.round(s.temp)}°</div>`;
+    };
+    return `
+      <div class="temps-section-label" style="margin-top:14px">${this._t('bed_segments')}${avg != null ? ` <span class="bed-avg mono">⌀ ${avg.toFixed(1)}°</span>` : ''}</div>
+      <div class="bed-grid" style="grid-template-columns:repeat(${xs.length},1fr)">
+        ${ys.map(y => xs.map(x => cell(byKey[`${x}_${y}`])).join('')).join('')}
+      </div>`;
+  }
+
   // ── Event handlers ──────────────────────────────────────────────────────────
 
   _onClick(e) {
@@ -1514,6 +1860,7 @@ class PrinterCard3D extends HTMLElement {
       case 'close-sheet':     this._closeSheet(); break;
       case 'pause':           this._pressButton('pause'); break;
       case 'resume':          this._pressButton('resume'); break;
+      case 'continue':        this._pressButton('continue'); break;
       case 'cancel':          this._pressButton('cancel'); break;
       case 'emergency':       this._handleEmergency(); break;
       case 'run-macro':       this._runMacro(el.dataset.entity); break;
@@ -1694,6 +2041,18 @@ class PrinterCard3D extends HTMLElement {
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
 
 :host { display: block; }
+
+.stat-dim { opacity: 0.45; }
+.stat-tool { min-width: 0; }
+.stat-tool .stat-val { font-size: .74rem; letter-spacing: -.02em; white-space: nowrap; }
+.bed-grid { display: grid; gap: 3px; margin: 6px 0 4px; }
+.bed-cell {
+  font-family: 'Share Tech Mono', monospace; font-size: 11px; text-align: center;
+  padding: 6px 0; border-radius: 4px; color: var(--primary-text-color);
+  border: 1px solid var(--divider-color, rgba(255,255,255,.08));
+}
+.bed-cell-na { opacity: 0.4; }
+.bed-avg { font-weight: 400; opacity: 0.7; margin-left: 6px; text-transform: none; }
 
 .card {
   background: var(--card-background-color, var(--ha-card-background-color, #1c1c1e));
@@ -1929,6 +2288,7 @@ const ICON_HOME = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16
 const ICON_INFO = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M13 9h-2V7h2m0 10h-2v-6h2m-1-9A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2z"/></svg>`;
 const ICON_MORE = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 16a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2m0-6a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2m0-6a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/></svg>`;
 const ICON_POWER = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16.56 5.44l-1.45 1.45A6.97 6.97 0 0 1 17 12a5 5 0 0 1-5 5 5 5 0 0 1-5-5c0-2.04 1.1-3.8 2.71-4.77L8.27 5.79A8.97 8.97 0 0 0 5 12a7 7 0 0 0 7 7 7 7 0 0 0 7-7c0-2.57-1.36-4.81-3.44-6.11zM13 3h-2v10h2V3z"/></svg>`;
+const ICON_SPOOL = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2m0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8m0-11a3 3 0 1 0 3 3 3 3 0 0 0-3-3m0 4.5A1.5 1.5 0 1 1 13.5 12 1.5 1.5 0 0 1 12 13.5"/></svg>`;
 const ICON_RESTART = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 0 0-8 8 8 8 0 0 0 8 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18a6 6 0 0 1-6-6 6 6 0 0 1 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`;
 
 // ── Register ──────────────────────────────────────────────────────────────────

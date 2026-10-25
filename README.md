@@ -1,10 +1,10 @@
 # Lovelace 3D Printer Card for Home Assistant
 
-`lovelace-3d-printer-card` is a custom Lovelace card for monitoring and controlling **Moonraker/Klipper** 3D printers from Home Assistant. Single-file, zero dependencies, no build step.
+`lovelace-3d-printer-card` is a custom Lovelace card for monitoring and controlling **Moonraker/Klipper**, **OctoPrint** and **PrusaLink** 3D printers (including the multi-tool **Prusa XL**) from Home Assistant. Single-file, zero dependencies, no build step.
 
 Key features at a glance:
 
-- **Animated SVG printer visualization** — i3, CoreXY, CoreXY Flying Gantry, and Cantilever styles; printed object builds up layer by layer
+- **Animated SVG printer visualization** — i3, CoreXY, CoreXY Flying Gantry, Cantilever and Prusa XL (tool-changer) styles; printed object builds up layer by layer
 - **Heater glow effect** — hotend, bed, and chamber glow in the SVG when a target temperature is set
 - **Message banner** — displays Klipper error/status messages, tinted with the current state color
 - **Live stats bar** — hotend temp, bed temp, extra heaters, speed factor, flow factor
@@ -71,6 +71,8 @@ Key features at a glance:
    - `/local/lovelace-3d-printer-card/entities/en_generic.js`
    - `/local/lovelace-3d-printer-card/entities/de_generic.js`
    - `/local/lovelace-3d-printer-card/entities/de_bambu_generic.js`
+   - `/local/lovelace-3d-printer-card/entities/en_octoprint.js`
+   - `/local/lovelace-3d-printer-card/entities/en_prusalink.js`
    Add each entity mapping file you use; see the `entities/` folder for available options.
 
 ### Add the card to your dashboard
@@ -115,6 +117,35 @@ name: Bambu P1S
 base_entity: x1c_myprinter
 entity_mappings: de_bambu_generic
 ```
+
+**OctoPrint (e.g. Prusa XL over USB)** — the mapping is auto-detected from `sensor.<base>_current_state`, so `entity_mappings` can be left out. Use the prefix your OctoPrint entities share as `base_entity` (default `octoprint`, or e.g. `prusa_xl` if you renamed the device), with no trailing underscore:
+
+```yaml
+type: custom:lovelace-3d-printer-card
+name: Prusa XL
+base_entity: prusa_xl
+printer_type: prusa-xl        # CoreXY drawing with tool-changer docks
+power_switch: switch.prusa_xl_printer
+cameras:
+  - entity: camera.prusa_xl_camera
+# Optional:
+# tool_count: 5               # force the number of tools shown (default: tools reporting a temperature)
+# active_tool: sensor.xl_tool # entity whose state is the active tool (1–5 or T0–T4)
+# exclude:                    # hide extra firmware readings you don't need
+#   - sensor.prusa_xl_actual_a_temp
+```
+
+What you get with OctoPrint:
+- One temperature chip per tool (`actual_tool0_temp` … `actual_toolN_temp`); empty tool slots that report 0 °C are hidden.
+- Settable tool and bed targets via OctoPrint's `number` entities (`extruder_temperature`, `extruder_N_temperature`, `bed_temperature`).
+- The XL's 16 heatbed segments (`actual_b_X_Y_temp`) as a 4×4 heatmap in the **Temps** sheet.
+- Elapsed from `start_time`, ETA from `estimated_finish_time`, and Pause / Resume / Stop buttons.
+- **More** sheet with Restart OctoPrint, Reboot and Shutdown.
+- Without an active-tool entity, the tool drawn on the carriage is the hottest tool that has a target set.
+
+The OctoPrint integration has no G-code service, so the jog grid only appears if you create a `script.<base>_jog` that accepts `axis` and `distance` variables.
+
+**PrusaLink (Prusa XL, MK4/MK4S, MINI, CORE One)** — also auto-detected (`entity_mappings: en_prusalink`). Most PrusaLink sensors (temperatures, targets, positions, speed, flow, fans) are **disabled by default** in Home Assistant, so enable them on the device page. PrusaLink only reports the active nozzle, and its targets, speed and flow are read-only.
 
 **Check the `entities/` folder** in the repo to see which mapping files are available (e.g. `en_generic.js`, `de_generic.js`, `de_bambu_generic.js`). Use the filename without `.js` as the value.
 

@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { background:#111; color:#eee; font-family:sans-serif; margin:0; padding:16px;
+         --primary-text-color:#e1e1e1; --secondary-text-color:#9e9e9e; --card-background-color:#1c1c1e; --divider-color:rgba(255,255,255,.12); }
+  #wrap { width: 420px; }
+</style>
+</head>
+<body>
+<div id="wrap"></div>
+<script type="module">
+  // Mock Home Assistant using the real entity IDs from a Prusa XL on OctoPrint.
+  const params = new URLSearchParams(location.search);
+  const scenario = params.get('s') || 'printing';
+  const b = 'prusa_xl';
+  const states = {};
+  const add = (id, state, attrs = {}) => { states[id] = { entity_id: id, state: String(state), attributes: attrs }; };
+  const temp = (fn) => ({ unit_of_measurement: '°C', device_class: 'temperature', friendly_name: fn });
+  const printing = scenario === 'printing';
+
+  add(`sensor.${b}_current_state`, printing ? 'printing' : 'operational', { device_class: 'enum', friendly_name: 'Prusa XL Current State' });
+  add(`sensor.${b}_job_percentage`, printing ? 42 : 0, { unit_of_measurement: '%', friendly_name: 'Prusa XL Job Percentage' });
+  add(`sensor.${b}_current_file`, printing ? 'XL_benchy_5tool_0.4n_PLA.bgcode' : 'unknown', { friendly_name: 'Prusa XL Current File' });
+  add(`sensor.${b}_current_file_size`, 1234567, { unit_of_measurement: 'B' });
+  add(`sensor.${b}_start_time`, printing ? new Date(Date.now() - 5400e3).toISOString() : 'unknown', { device_class: 'timestamp' });
+  add(`sensor.${b}_estimated_finish_time`, printing ? new Date(Date.now() + 7300e3).toISOString() : 'unknown', { device_class: 'timestamp' });
+  add(`sensor.${b}_actual_bed_temp`, printing ? 59.8 : 22.1, temp('Prusa XL Actual bed temp'));
+  add(`sensor.${b}_target_bed_temp`, printing ? 60 : 0, temp('Prusa XL Target bed temp'));
+  add(`number.${b}_bed_temperature`, printing ? 60 : 0, { min: 0, max: 300, unit_of_measurement: '°C' });
+  // Tools: tool0–tool4 installed, tool5 is a phantom slot reporting 0
+  const toolTemps = printing ? [214.6, 170.2, 0.0 + 23.5, 23.4, 23.1, 0] : [24, 23.9, 23.5, 23.4, 23.1, 0];
+  const toolTargets = printing ? [215, 170, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0];
+  toolTemps.forEach((t, i) => {
+    add(`sensor.${b}_actual_tool${i}_temp`, t, temp(`Prusa XL Actual tool${i} temp`));
+    add(`sensor.${b}_target_tool${i}_temp`, toolTargets[i], temp(`Prusa XL Target tool${i} temp`));
+    add(i === 0 ? `number.${b}_extruder_temperature` : `number.${b}_extruder_${i}_temperature`, toolTargets[i], { min: 0, max: 300 });
+  });
+  // 4×4 bed segments, warmer in the middle when printing
+  for (let x = 0; x < 4; x++) for (let y = 0; y < 4; y++) {
+    const mid = (x === 1 || x === 2) && (y === 1 || y === 2);
+    add(`sensor.${b}_actual_b_${x}_${y}_temp`, printing ? (mid ? 61 : 38 + x) : 22, temp(`Prusa XL Actual B_${x}_${y} temp`));
+    add(`sensor.${b}_target_b_${x}_${y}_temp`, printing ? (mid ? 60 : 0) : 0, temp(`Prusa XL Target B_${x}_${y} temp`));
+  }
+  for (const k of ['a', 'w', 'x0', 'x1', 'x5']) add(`sensor.${b}_actual_${k}_temp`, 30, temp(`Prusa XL Actual ${k.toUpperCase()} temp`));
+  add(`camera.${b}_camera`, 'idle', { friendly_name: 'Prusa XL Camera', entity_picture: '' });
+  add(`button.${b}_pause_job`, 'unknown', {});
+  add(`button.${b}_resume_job`, 'unknown', {});
+  add(`button.${b}_stop_job`, 'unknown', {});
+  add(`button.${b}_restart_octoprint`, 'unknown', {});
+  add(`button.${b}_reboot_system`, 'unknown', {});
+  add(`button.${b}_shutdown_system`, 'unknown', {});
+  add(`binary_sensor.${b}_printing`, printing ? 'on' : 'off', {});
+  add(`switch.${b}_printer`, 'on', {});
+
+  window.__calls = [];
+  const hass = { states, locale: { language: 'en' }, services: { octoprint: { printer_connect: {} } },
+                 callService: (d, s, data) => window.__calls.push([d, s, data]) };
+
+  await import('../lovelace-3d-printer-card.js');
+  const card = document.createElement('lovelace-3d-printer-card');
+  const cfg = { type: 'custom:lovelace-3d-printer-card', name: 'Prusa XL', base_entity: 'prusa_xl_', printer_type: 'prusa-xl',
+                power_switch: `switch.${b}_printer`, cameras: [{ entity: `camera.${b}_camera` }] };
+  if (params.get('map')) cfg.entity_mappings = params.get('map');
+  card.setConfig(cfg);
+  document.getElementById('wrap').appendChild(card);
+  card.hass = hass;
+  setTimeout(() => { window.__card = card; window.__ready = true; }, 800);
+</script>
+</body>
+</html>
