@@ -63,6 +63,7 @@
   const cfg = { type: 'custom:lovelace-3d-printer-card', name: 'Prusa XL', base_entity: 'prusa_xl_', printer_type: 'prusa-xl',
                 power_switch: `switch.${b}_printer`, cameras: [{ entity: `camera.${b}_camera` }] };
   if (params.get('map')) cfg.entity_mappings = params.get('map');
+  if (params.get('diag')) cfg.show_diagnostic_sensors = true;
   card.setConfig(cfg);
   document.getElementById('wrap').appendChild(card);
   card.hass = hass;

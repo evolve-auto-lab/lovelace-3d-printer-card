@@ -52,10 +52,11 @@ export default {
   // Friendly names for Prusa firmware's extra M105 readings (from Prusa-Firmware-Buddy
   // temperature.cpp). Matched against the entity suffix; first match wins.
   // {n} = captured index, {n1} = index + 1 (tools are numbered from 1 on the printer).
+  // diagnostic: hidden unless the card config sets show_diagnostic_sensors: true.
   labels: [
     { match: "^actual_a_temp$", label: "Mainboard" },
-    { match: "^actual_w_temp$", label: "Bed settle timer", unit: "s" },
-    { match: "^actual_x5_temp$", label: "Heatbreak (no tool)" },
+    { match: "^actual_w_temp$", label: "Bed settle timer", unit: "s", diagnostic: true },
+    { match: "^actual_x5_temp$", label: "Heatbreak (no tool)", diagnostic: true },
     { match: "^actual_x(\\d+)_temp$", label: "Tool {n1} heatbreak" },
     { match: "^actual_chamber_temp$", label: "Chamber" }
   ],

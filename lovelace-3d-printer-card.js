@@ -17,6 +17,8 @@
 //   tool_count: 5             # optional; multi-tool printers
 //   active_tool: sensor.x     # optional; entity reporting the active tool (1-5 or T0-T4)
 //   exclude: [sensor.x, ...]  # optional; entities to leave off the card
+//   show_diagnostic_sensors: true  # optional; show Prusa's bed settle timer / no-tool heatbreak
+//   font_scale: 0.9           # optional; scale all text
 //
 // All entity IDs are auto-derived from base_entity, with optional overrides:
 //   entities:
@@ -109,8 +111,8 @@ const BUILTIN_MAPPINGS = {
     ignore: ["^target_"],
     labels: [
       { match: "^actual_a_temp$", label: "Mainboard" },
-      { match: "^actual_w_temp$", label: "Bed settle timer", unit: "s" },
-      { match: "^actual_x5_temp$", label: "Heatbreak (no tool)" },
+      { match: "^actual_w_temp$", label: "Bed settle timer", unit: "s", diagnostic: true },
+      { match: "^actual_x5_temp$", label: "Heatbreak (no tool)", diagnostic: true },
       { match: "^actual_x(\\d+)_temp$", label: "Tool {n1} heatbreak" },
       { match: "^actual_chamber_temp$", label: "Chamber" }
     ],
@@ -1157,6 +1159,7 @@ class PrinterCard3D extends HTMLElement {
       let lbl = label(st, sensorId);
       let hint = null;
       let unit = '°';
+      let diagnostic = false;
       for (const r of (m.labels || [])) {
         const mm = suffix.match(new RegExp(r.match));
         if (!mm) continue;
@@ -1166,8 +1169,11 @@ class PrinterCard3D extends HTMLElement {
         lbl = fill(r.label) ?? lbl;
         hint = fill(r.hint);
         if (r.unit != null) unit = r.unit;
+        diagnostic = !!r.diagnostic;
         break;
       }
+      // Diagnostic readings (e.g. Prusa's bed settle timer) are opt-in
+      if (diagnostic && !this._config.show_diagnostic_sensors) continue;
 
       if (targetSt) {
         tempTargetIds.add(targetId);

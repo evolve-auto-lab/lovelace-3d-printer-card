@@ -132,6 +132,7 @@ cameras:
 # tool_count: 5               # force the number of tools shown (default: tools reporting a temperature)
 # active_tool: sensor.xl_tool # entity whose state is the active tool (1–5 or T0–T4)
 # font_scale: 0.9             # shrink (or grow, e.g. 1.1) all text on the card
+# show_diagnostic_sensors: true  # also list the bed settle timer and the no-tool heatbreak (hidden by default)
 # exclude:                    # hide extra firmware readings you don't need
 #   - sensor.prusa_xl_actual_a_temp
 ```
