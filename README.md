@@ -136,7 +136,7 @@ cameras:
 ```
 
 What you get with OctoPrint:
-- One temperature chip per tool (`actual_tool0_temp` … `actual_toolN_temp`); empty tool slots that report 0 °C are hidden.
+- One temperature chip per tool (`actual_tool0_temp` … `actual_toolN_temp`); empty tool slots (which report a bogus 0–6 °C) are hidden.
 - Settable tool and bed targets via OctoPrint's `number` entities (`extruder_temperature`, `extruder_N_temperature`, `bed_temperature`).
 - The XL's 16 heatbed segments (`actual_b_X_Y_temp`) as a 4×4 heatmap in the **Temps** sheet.
 - Elapsed from `start_time`, ETA from `estimated_finish_time`, and Pause / Resume / Stop buttons.

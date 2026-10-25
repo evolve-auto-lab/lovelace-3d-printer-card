@@ -1,5 +1,5 @@
 // =============================================================================
-// Lovelace 3D Printer Card  v1.1.0
+// Lovelace 3D Printer Card  v1.2.0
 // A HACS-installable Home Assistant Lovelace card for Moonraker/Klipper, OctoPrint
 // and PrusaLink printers — including the multi-tool Prusa XL.
 //
@@ -782,6 +782,29 @@ function renderPrinterSVG(printerType, progress, hotendTarget, bedTarget, chambe
   }
 }
 
+// ── Stat chips ────────────────────────────────────────────────────────────────
+// Temperature chip: current on top, target on a small second line (blank line when
+// no target so every chip in the row lines up).
+function tempChip(icon, valClass, current, target, label, dim = false) {
+  const cur = current != null && !isNaN(current) ? `${Math.round(current)}°` : '—';
+  const sub = target ? `→ ${Math.round(target)}°` : '&nbsp;';
+  return `<div class="stat-item ${dim ? 'stat-dim' : ''}">
+    <span class="stat-icon">${icon}</span>
+    <span class="stat-val ${valClass}">${cur}</span>
+    <span class="stat-sub">${sub}</span>
+    <span class="stat-label">${label}</span>
+  </div>`;
+}
+
+function statChip(icon, value, label) {
+  return `<div class="stat-item">
+    <span class="stat-icon">${icon}</span>
+    <span class="stat-val">${value}</span>
+    <span class="stat-sub">&nbsp;</span>
+    <span class="stat-label">${label}</span>
+  </div>`;
+}
+
 // ── Progress arc (non-interactive, display-only) ──────────────────────────────
 function progressArcSVG(pct) {
   const cx = 36, cy = 36, r = 28;
@@ -1087,12 +1110,12 @@ class PrinterCard3D extends HTMLElement {
       }
       this._toolsDetected = this._tools.length;
       // Limit to the configured tool count, otherwise hide tools that report no reading
-      // (an empty XL tool slot reports 0 °C or nothing at all).
+      // (an empty XL tool slot reports a bogus 0–6 °C, or nothing at all).
       const cfgCount = parseInt(this._config.tool_count, 10);
       if (cfgCount > 0) {
         this._tools = this._tools.slice(0, cfgCount);
       } else {
-        const present = this._tools.filter(t => t.current != null && t.current > 0);
+        const present = this._tools.filter(t => (t.current != null && t.current >= 10) || t.target > 0);
         if (present.length) this._tools = present;
       }
       // Tool 0 doubles as the generic hotend if nothing else claimed it
@@ -1600,81 +1623,38 @@ class PrinterCard3D extends HTMLElement {
 
       <!-- Stats bar -->
       <div class="stats-bar">
-        ${multiTool ? this._tools.map(t => {
-          const cur = t.current != null ? Math.round(t.current) + '°' : '—';
-          const val = t.target ? `${t.current != null ? Math.round(t.current) : '—'}/${Math.round(t.target)}°` : cur;
-          const hot = t.target > 0;
-          return `<div class="stat-item stat-tool ${hot ? '' : 'stat-dim'}">
-          <span class="stat-icon">${ICON_HOTEND}</span>
-          <span class="stat-val hotend-val">${val}</span>
-          <span class="stat-label">${t.label}</span>
-        </div>`;
-        }).join('') : ''}
-        ${!multiTool && hotendStr ? `<div class="stat-item">
-          <span class="stat-icon">${ICON_HOTEND}</span>
-          <span class="stat-val hotend-val">${hotendStr}</span>
-          <span class="stat-label">${this._t('hotend')}</span>
-        </div>` : ''}
-        ${bedStr ? `<div class="stat-item">
-          <span class="stat-icon">${ICON_BED}</span>
-          <span class="stat-val bed-val">${bedStr}</span>
-          <span class="stat-label">${this._t('bed')}</span>
-        </div>` : ''}
-        ${this._heaters.filter(h => !h.readonly && h.target_entity).map(h => {
-          const cur = h.current != null ? Math.round(h.current) + '°' : '—';
-          const val = h.target != null ? `${cur}/${Math.round(h.target)}°` : cur;
-          return `<div class="stat-item">
-          <span class="stat-icon">${ICON_THERMOMETER}</span>
-          <span class="stat-val" style="color:#a78bfa">${val}</span>
-          <span class="stat-label">${h.label}</span>
-        </div>`;
-        }).join('')}
-        ${speedFactor != null ? `<div class="stat-item">
-          <span class="stat-icon">${ICON_SPEED}</span>
-          <span class="stat-val">${fmtPct(speedFactor)}</span>
-          <span class="stat-label">${this._t('speed')}</span>
-        </div>` : ''}
-        ${flowFactor != null ? `<div class="stat-item">
-          <span class="stat-icon">${ICON_FLOW}</span>
-          <span class="stat-val">${fmtPct(flowFactor)}</span>
-          <span class="stat-label">${this._t('flow')}</span>
-        </div>` : ''}
-        ${material && material !== '---' ? `<div class="stat-item">
-          <span class="stat-icon">${ICON_SPOOL}</span>
-          <span class="stat-val">${material}</span>
-          <span class="stat-label">${this._t('material')}</span>
-        </div>` : ''}
+        ${multiTool ? this._tools.map(t => tempChip(ICON_HOTEND, 'hotend-val', t.current, t.target, t.label, !(t.target > 0))).join('') : ''}
+        ${!multiTool && hotendTemp != null ? tempChip(ICON_HOTEND, 'hotend-val', hotendTemp, hotendTarget, this._t('hotend')) : ''}
+        ${bedTemp != null ? tempChip(ICON_BED, 'bed-val', bedTemp, bedTarget, this._t('bed')) : ''}
+        ${this._heaters.filter(h => !h.readonly && h.target_entity).map(h => tempChip(ICON_THERMOMETER, 'heater-val', h.current, h.target, h.label)).join('')}
+        ${speedFactor != null ? statChip(ICON_SPEED, fmtPct(speedFactor), this._t('speed')) : ''}
+        ${flowFactor != null ? statChip(ICON_FLOW, fmtPct(flowFactor), this._t('flow')) : ''}
+        ${material && material !== '---' ? statChip(ICON_SPOOL, material, this._t('material')) : ''}
       </div>
 
       <div class="sep"></div>
 
-      <!-- Tile grid -->
+      <!-- Job panel: progress arc + progress / elapsed / ETA rows -->
       <div class="tiles">
-        <!-- Progress tile -->
-        <div class="tile tile-progress ${isActive ? '' : 'tile-dim'}">
+        <div class="tile tile-job ${isActive ? '' : 'tile-dim'}">
           <div class="tile-arc">${progressArcSVG(progress)}</div>
-          <div class="tile-info">
-            <div class="tile-primary">${Math.round(progress)}%</div>
-            ${layerStr ? `<div class="tile-secondary">${layerStr} layers</div>` : ''}
-            ${filamentUsed != null ? `<div class="tile-secondary">${filamentUsed.toFixed(2)}m used</div>` : ''}
-          </div>
-        </div>
-
-        <!-- ETA tile -->
-        <div class="tile ${!isActive ? 'tile-dim' : ''}">
-          <div class="tile-icon">${ICON_ETA}</div>
-          <div class="tile-label">${this._t('eta')}</div>
-          <div class="tile-value">
-            ${etaSecs != null ? `<span class="mono">${fmtSeconds(etaSecs)}</span>` : '<span class="na">—</span>'}
-          </div>
-        </div>
-
-        <!-- Elapsed tile -->
-        <div class="tile ${!isActive ? 'tile-dim' : ''}">
-          <div class="tile-icon">${ICON_ELAPSED}</div>
-          <div class="tile-label">${this._t('elapsed')}</div>
-          <div class="tile-value">
-            ${durationSecs != null ? `<span class="mono">${fmtSeconds(durationSecs)}</span>` : '<span class="na">—</span>'}
+          <div class="job-rows">
+            <div class="job-row">
+              <span class="job-label">${this._t('progress')}</span>
+              <span class="job-val mono">${Math.round(progress)}%${layerStr ? `<span class="job-sub"> · ${layerStr}</span>` : ''}</span>
+            </div>
+            <div class="job-row">
+              <span class="job-label">${this._t('elapsed')}</span>
+              <span class="job-val mono">${durationSecs != null ? fmtSeconds(durationSecs) : '—'}</span>
+            </div>
+            <div class="job-row">
+              <span class="job-label">${this._t('eta')}</span>
+              <span class="job-val mono">${etaSecs != null ? `${fmtSeconds(etaSecs)}${isActive && fmtETA(etaSecs) ? `<span class="job-sub"> · ${fmtETA(etaSecs)}</span>` : ''}` : '—'}</span>
+            </div>
+            ${filamentUsed != null ? `<div class="job-row">
+              <span class="job-label">Filament</span>
+              <span class="job-val mono">${filamentUsed.toFixed(2)} m</span>
+            </div>` : ''}
           </div>
         </div>
 
@@ -1695,20 +1675,16 @@ class PrinterCard3D extends HTMLElement {
 
       <div class="sep"></div>
 
-      <!-- Print controls (only when print is running) -->
-      ${isActive && (hasPause || hasResume || hasCancel) ? `<div class="controls controls-print">
-        ${isPrinting && hasPause ? `<button class="ctrl-btn ctrl-pause" data-action="pause">${ICON_PAUSE} ${this._t('pause')}</button>` : ''}
-        ${isPaused && status === 'attention' && this._entityExists('continue') ? `<button class="ctrl-btn ctrl-resume" data-action="continue">${ICON_PLAY} ${this._t('continue')}</button>` : ''}
-        ${isPaused && status !== 'attention' && hasResume ? `<button class="ctrl-btn ctrl-resume" data-action="resume">${ICON_PLAY} ${this._t('resume')}</button>` : ''}
-        ${hasCancel ? `<button class="ctrl-btn ctrl-cancel" data-action="cancel">${ICON_STOP} ${this._t('cancel')}</button>` : ''}
-      </div>` : ''}
-
-      <!-- Other controls -->
+      <!-- Controls: print actions + sheets in one even row -->
       <div class="controls">
-        ${hasMacros ? `<button class="ctrl-btn ctrl-tune" data-action="open-macros">${ICON_MACRO} ${this._t('macros')}</button>` : ''}
-        ${hasMovement ? `<button class="ctrl-btn ctrl-tune" data-action="open-movement">${ICON_MOVE} ${this._t('move')}</button>` : ''}
-        ${hasMisc ? `<button class="ctrl-btn ctrl-tune" data-action="open-misc">${ICON_THERMOMETER} ${this._t('misc')}</button>` : ''}
-        ${hasSystem ? `<button class="ctrl-btn ctrl-system" data-action="open-system">${ICON_MORE} ${this._t('more')}</button>` : ''}
+        ${isActive && isPrinting && hasPause ? `<button class="ctrl-btn ctrl-pause" data-action="pause">${ICON_PAUSE}<span>${this._t('pause')}</span></button>` : ''}
+        ${isActive && isPaused && status === 'attention' && this._entityExists('continue') ? `<button class="ctrl-btn ctrl-resume" data-action="continue">${ICON_PLAY}<span>${this._t('continue')}</span></button>` : ''}
+        ${isActive && isPaused && status !== 'attention' && hasResume ? `<button class="ctrl-btn ctrl-resume" data-action="resume">${ICON_PLAY}<span>${this._t('resume')}</span></button>` : ''}
+        ${isActive && hasCancel ? `<button class="ctrl-btn ctrl-cancel" data-action="cancel">${ICON_STOP}<span>${this._t('cancel')}</span></button>` : ''}
+        ${hasMacros ? `<button class="ctrl-btn ctrl-tune" data-action="open-macros">${ICON_MACRO}<span>${this._t('macros')}</span></button>` : ''}
+        ${hasMovement ? `<button class="ctrl-btn ctrl-tune" data-action="open-movement">${ICON_MOVE}<span>${this._t('move')}</span></button>` : ''}
+        ${hasMisc ? `<button class="ctrl-btn ctrl-tune" data-action="open-misc">${ICON_THERMOMETER}<span>${this._t('misc')}</span></button>` : ''}
+        ${hasSystem ? `<button class="ctrl-btn ctrl-tune" data-action="open-system">${ICON_MORE}<span>${this._t('more')}</span></button>` : ''}
       </div>
 
       <!-- Overlay -->
@@ -2186,8 +2162,6 @@ class PrinterCard3D extends HTMLElement {
 :host { display: block; }
 
 .stat-dim { opacity: 0.45; }
-.stat-tool { min-width: 0; }
-.stat-tool .stat-val { font-size: .74rem; letter-spacing: -.02em; white-space: nowrap; }
 .bed-grid { display: grid; gap: 3px; margin: 6px 0 4px; }
 .bed-cell {
   font-family: 'Share Tech Mono', monospace; font-size: 11px; text-align: center;
@@ -2237,13 +2211,15 @@ class PrinterCard3D extends HTMLElement {
 .printer-off-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--primary-text-color); opacity:1; pointer-events:none; }
 
 /* ── Stats bar ── */
-.stats-bar { display:flex; justify-content:space-around; gap:4px; margin:8px 0 12px; flex-wrap:wrap; }
-.stat-item { display:flex; flex-direction:column; align-items:space-between; gap:2px; flex:1; min-width:56px; }
+.stats-bar { display:grid; grid-template-columns:repeat(auto-fit, minmax(48px, 1fr)); gap:8px 4px; margin:8px 0 12px; }
+.stat-item { display:flex; flex-direction:column; align-items:center; gap:2px; min-width:0; }
+.stat-sub { font-family:'Share Tech Mono',monospace; font-size:.68rem; color:var(--secondary-text-color); opacity:.8; line-height:1.1; white-space:nowrap; }
+.heater-val { color:#a78bfa; }
 .stat-icon { color:var(--secondary-text-color); line-height:1; opacity:.7; text-align:center;}
 .stat-val { font-family:'Share Tech Mono',monospace; font-size:.85rem; font-weight:600; color:var(--primary-text-color); text-align:center;}
 .hotend-val { color:#ff8c66; }
 .bed-val    { color:#66b2ff; }
-.stat-label { font-size:.68rem; color:var(--secondary-text-color); opacity:.7; text-transform:uppercase; letter-spacing:.06em; text-align:center; }
+.stat-label { font-size:.64rem; color:var(--secondary-text-color); opacity:.7; text-transform:uppercase; letter-spacing:.05em; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 
 /* ── Separator ── */
 .sep { height:1px; background:var(--divider-color,rgba(255,255,255,.08)); margin:8px 0; }
@@ -2252,7 +2228,12 @@ class PrinterCard3D extends HTMLElement {
 .tiles { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:8px 0; }
 .tile { background:var(--secondary-background-color,rgba(255,255,255,.04)); border-radius:10px; padding:10px; display:flex; flex-direction:column; gap:4px; transition:opacity .3s; }
 .tile-dim { opacity:.45; }
-.tile-progress { grid-column:span 2; flex-direction:row; align-items:center; gap:12px; }
+.tile-job { grid-column:span 2; flex-direction:row; align-items:center; gap:14px; padding:10px 14px; }
+.job-rows { flex:1; display:flex; flex-direction:column; gap:6px; min-width:0; }
+.job-row { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+.job-label { font-size:.68rem; color:var(--secondary-text-color); opacity:.7; text-transform:uppercase; letter-spacing:.06em; }
+.job-val { font-size:.92rem; font-weight:600; color:var(--primary-text-color); white-space:nowrap; }
+.job-sub { font-size:.75rem; font-weight:400; color:var(--secondary-text-color); }
 .tile-arc { flex-shrink:0; }
 .tile-info { display:flex; flex-direction:column; gap:2px; }
 .tile-primary { font-family:'Share Tech Mono',monospace; font-size:1.4rem; font-weight:700; color:var(--mode-color); }
@@ -2283,8 +2264,8 @@ class PrinterCard3D extends HTMLElement {
 .na { opacity:.35; }
 
 /* ── Controls ── */
-.controls { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0; justify-content:center; }
-.ctrl-btn { display:flex; align-items:center; gap:6px; padding:8px 14px; border-radius:8px; border:none; cursor:pointer; font-family:var(--primary-font-family,Roboto,sans-serif); font-size:.82rem; font-weight:600; transition:all .18s; background:var(--secondary-background-color,rgba(255,255,255,.06)); color:var(--primary-text-color); }
+.controls { display:grid; grid-template-columns:repeat(auto-fit, minmax(68px, 1fr)); gap:8px; margin:8px 0; }
+.ctrl-btn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:10px 4px; border-radius:10px; min-width:0; border:none; cursor:pointer; font-family:var(--primary-font-family,Roboto,sans-serif); font-size:.82rem; font-weight:600; transition:all .18s; background:var(--secondary-background-color,rgba(255,255,255,.06)); color:var(--primary-text-color); }
 .ctrl-btn:hover { filter:brightness(1.2); }
 .ctrl-btn:active { transform:scale(0.97); }
 .ctrl-pause    { background:rgba(229,192,0,.15); color:#e5c000; border:1px solid rgba(229,192,0,.3); }
