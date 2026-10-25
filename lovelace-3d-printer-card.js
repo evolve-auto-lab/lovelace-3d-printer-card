@@ -73,6 +73,142 @@ const DEFAULT_MAPPINGS = {
   camera: [['thumbnail', ['thumbnail']]],
 };
 
+// ── Built-in maps for integrations ─────────────────────────────────────────────
+// Mirrors entities/en_octoprint.js and entities/en_prusalink.js. HACS only installs the
+// card's own .js file, not the entities/ folder, so these keep auto-detection working.
+const BUILTIN_MAPPINGS = {
+  octoprint: {
+    sensor: [
+      ["status", ["current_state"]],
+      ["progress", ["job_percentage"]],
+      ["duration", ["start_time"]],
+      ["eta", ["estimated_finish_time"]],
+      ["filename", ["current_file"]],
+      ["file_size", ["current_file_size"]],
+      ["hotend", ["actual_tool0_temp"]],
+      ["bed", ["actual_bed_temp"]],
+      ["chamber", ["actual_chamber_temp"]],
+      ["hotend_target", ["target_tool0_temp"]],
+      ["bed_target", ["target_bed_temp"]],
+      ["chamber_target", ["target_chamber_temp"]]
+    ],
+    number: [
+      ["hotend_target", ["extruder_temperature"]],
+      ["bed_target", ["bed_temperature"]]
+    ],
+    button: [
+      ["cancel", ["stop_job"]],
+      ["pause", ["pause_job"]],
+      ["resume", ["resume_job"]],
+      ["server_restart", ["restart_octoprint"]],
+      ["host_restart", ["reboot_system"]],
+      ["host_shutdown", ["shutdown_system"]]
+    ],
+    camera: [["thumbnail", ["thumbnail", "job_preview"]]],
+    hidden_roles: ["file_size"],
+    ignore: ["^target_"],
+    bed_segments: "actual_b_{x}_{y}_temp",
+    tools: {
+      actual: "actual_tool{n}_temp",
+      target_sensor: "target_tool{n}_temp",
+      target_number: "extruder_{n}_temperature",
+      target_number_first: "extruder_temperature"
+    },
+    ui: {
+      eta: "ETA",
+      elapsed: "Elapsed",
+      file: "File",
+      progress: "Progress",
+      hotend: "Nozzle",
+      bed: "Bed",
+      speed: "Speed",
+      flow: "Flow",
+      pause: "Pause",
+      resume: "Resume",
+      continue: "Continue",
+      cancel: "Cancel",
+      macros: "Macros",
+      move: "Move",
+      misc: "Temps",
+      more: "More",
+      movement: "Movement",
+      system: "System",
+      temperatures: "Temperatures",
+      fans_outputs: "Fans & Outputs",
+      tools: "Tools",
+      tool: "Tool",
+      service_control: "Service Control",
+      host_control: "Host Control",
+      server_restart: "Restart OctoPrint",
+      reboot_host: "Reboot Host",
+      shutdown_host: "Shutdown Host",
+      cameras: "Cameras",
+      camera_fallback: "Camera",
+      home_all: "All"
+    }
+  },
+  prusalink: {
+    sensor: [
+      ["status", ["@device", "printer_state"]],
+      ["progress", ["progress"]],
+      ["duration", ["print_start"]],
+      ["eta", ["print_finish"]],
+      ["filename", ["filename"]],
+      ["material", ["material"]],
+      ["hotend", ["nozzle_temperature"]],
+      ["bed", ["heatbed_temperature"]],
+      ["hotend_target", ["nozzle_target_temperature"]],
+      ["bed_target", ["heatbed_target_temperature"]],
+      ["speed_factor", ["print_speed"]],
+      ["flow_factor", ["print_flow"]],
+      ["position_x", ["x_position"]],
+      ["position_y", ["y_position"]],
+      ["position_z", ["z_height"]],
+      ["fan_hotend", ["hotend_fan"]],
+      ["fan_print", ["print_fan"]],
+      ["nozzle_diameter", ["nozzle_diameter"]],
+      ["min_extrusion_temp", ["minimum_extrusion_temperature"]]
+    ],
+    number: [],
+    button: [
+      ["cancel", ["cancel_job"]],
+      ["pause", ["pause_job"]],
+      ["resume", ["resume_job"]],
+      ["continue", ["continue_job"]]
+    ],
+    camera: [["thumbnail", ["preview", "job_preview"]]],
+    hidden_roles: ["min_extrusion_temp", "nozzle_diameter"],
+    ui: {
+      eta: "ETA",
+      elapsed: "Elapsed",
+      file: "File",
+      progress: "Progress",
+      hotend: "Nozzle",
+      bed: "Heatbed",
+      speed: "Speed",
+      flow: "Flow",
+      pause: "Pause",
+      resume: "Resume",
+      continue: "Continue",
+      cancel: "Cancel",
+      macros: "Macros",
+      move: "Position",
+      misc: "Misc",
+      more: "More",
+      movement: "Position",
+      system: "System",
+      temperatures: "Temperatures",
+      fans_outputs: "Fans",
+      material: "Material",
+      tools: "Tools",
+      tool: "Tool",
+      cameras: "Cameras",
+      camera_fallback: "Camera",
+      home_all: "All"
+    }
+  },
+};
+
 const DEFAULT_UI = {
   eta: 'ETA',
   elapsed: 'Elapsed',
@@ -760,7 +896,14 @@ class PrinterCard3D extends HTMLElement {
     const [lang, ...rest] = key.split('_');
     const variant = rest.join('_') || 'generic';
     const url = (k) => new URL(`./entities/${k}.js`, import.meta.url).href;
-    const chain = [...new Set([`en_${variant}`, `${lang}_generic`, 'en_generic'])].filter(k => k !== key);
+    // Built-in integration maps come before any *_generic file so a missing entities/
+    // folder (HACS installs) never silently falls back to the Klipper names.
+    if (variant !== 'generic' && BUILTIN_MAPPINGS[variant]) {
+      return import(/* webpackIgnore: true */ url(`en_${variant}`))
+        .then((m) => m.default)
+        .catch(() => BUILTIN_MAPPINGS[variant]);
+    }
+    const chain = [...new Set([`${lang}_generic`, 'en_generic'])].filter(k => k !== key);
     const tryNext = (i) => i >= chain.length
       ? Promise.resolve(DEFAULT_MAPPINGS)
       : import(/* webpackIgnore: true */ url(chain[i])).then((m) => m.default).catch(() => tryNext(i + 1));
