@@ -333,3 +333,9 @@ The card relies on entity mapping files to discover printer entities and transla
 - Home Assistant 2023.4 or newer
 - Moonraker integration installed and printer entities exposed to HA
 - No additional HACS frontend cards required
+
+---
+
+## Releasing updates (maintainers)
+
+Releases are automatic. Bump `CARD_VERSION` near the top of `lovelace-3d-printer-card.js`, optionally add release notes at `.github/release-notes/v<version>.md`, and push to `main`. The **Release** GitHub Action tags and publishes the release, and HACS then offers it as an update in Home Assistant under **Settings → Updates**.

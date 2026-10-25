@@ -1,0 +1,44 @@
+# Publishes a GitHub release whenever CARD_VERSION in the card file changes.
+# HACS watches releases, so each one shows up in Home Assistant under Settings → Updates.
+#
+# To ship an update: bump CARD_VERSION in lovelace-3d-printer-card.js (optionally add
+# .github/release-notes/v<version>.md) and push to main.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read card version
+        id: v
+        run: |
+          VERSION=$(grep -oP "const CARD_VERSION = '\K[^']+" lovelace-3d-printer-card.js)
+          if [ -z "$VERSION" ]; then echo "CARD_VERSION not found" >&2; exit 1; fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Card version: $VERSION"
+
+      - name: Create release if this version is new
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.v.outputs.version }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "$TAG already released; nothing to do."
+            exit 0
+          fi
+          NOTES=".github/release-notes/$TAG.md"
+          if [ -f "$NOTES" ]; then
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --notes-file "$NOTES"
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes
+          fi
