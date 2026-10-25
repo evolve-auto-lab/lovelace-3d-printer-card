@@ -1419,6 +1419,7 @@ class PrinterCard3D extends HTMLElement {
     const mc = stateColor(status);
     card.style.setProperty('--mode-color', mc);
     card.style.setProperty('--chip-bg', hexA(mc, 0.15));
+    card.style.setProperty('--p3d-font-scale', String(parseFloat(this._config.font_scale) || 1));
 
     const entityIds = Object.values(this._entities).filter(Boolean).sort().join(',');
     const structureChanged = this._lastEntityIds !== null && this._lastEntityIds !== entityIds;
@@ -2172,6 +2173,7 @@ class PrinterCard3D extends HTMLElement {
 .bed-avg { font-weight: 400; opacity: 0.7; margin-left: 6px; text-transform: none; }
 
 .card {
+  font-size: calc(14px * var(--p3d-font-scale, 1));
   background: var(--card-background-color, var(--ha-card-background-color, #1c1c1e));
   border-radius: var(--ha-card-border-radius, 12px);
   box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0,0,0,.35));
@@ -2185,7 +2187,7 @@ class PrinterCard3D extends HTMLElement {
 /* ── Message banner ── */
 .msg-banner { display:flex; align-items:flex-start; gap:8px; margin:-4px 0 10px; padding:9px 12px; border-radius:8px; border:1px solid transparent; }
 .msg-icon { color:var(--primary-text-color); flex-shrink:0; margin-top:1px; opacity:.8; }
-.msg-text { font-size:.82rem; font-weight:500; color:var(--primary-text-color); line-height:1.4; word-break:break-word; }
+.msg-text { font-size:.82em; font-weight:500; color:var(--primary-text-color); line-height:1.4; word-break:break-word; }
 
 /* ── Header ── */
 .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
@@ -2199,10 +2201,10 @@ class PrinterCard3D extends HTMLElement {
 .estop-btn { border-color:rgba(244,67,54,.45); color:#ff6b6b; }
 .estop-btn:hover { background:rgba(244,67,54,.15); border-color:#f44336; }
 .estop-confirm { background:rgba(244,67,54,.4) !important; color:#fff !important; border-color:#f44336 !important; animation:pulse-red .6s ease infinite; }
-.printer-name { font-size:1.05rem; font-weight:600; letter-spacing:.02em; }
+.printer-name { font-size:1.05em; font-weight:600; letter-spacing:.02em; }
 .state-chip { display:flex; align-items:center; gap:6px; background:var(--chip-bg); border:1px solid var(--mode-color); border-radius:20px; padding:4px 10px; }
 .state-dot { width:7px; height:7px; border-radius:50%; background:var(--mode-color); flex-shrink:0; }
-.state-label { font-size:.78rem; font-weight:600; color:var(--mode-color); letter-spacing:.04em; text-transform:uppercase; }
+.state-label { font-size:.78em; font-weight:600; color:var(--mode-color); letter-spacing:.04em; text-transform:uppercase; }
 
 /* ── Printer SVG ── */
 .printer-section { display:flex; justify-content:center; align-items:center; margin:8px 0; }
@@ -2213,13 +2215,13 @@ class PrinterCard3D extends HTMLElement {
 /* ── Stats bar ── */
 .stats-bar { display:grid; grid-template-columns:repeat(auto-fit, minmax(48px, 1fr)); gap:8px 4px; margin:8px 0 12px; }
 .stat-item { display:flex; flex-direction:column; align-items:center; gap:2px; min-width:0; }
-.stat-sub { font-family:'Share Tech Mono',monospace; font-size:.68rem; color:var(--secondary-text-color); opacity:.8; line-height:1.1; white-space:nowrap; }
+.stat-sub { font-family:'Share Tech Mono',monospace; font-size:.68em; color:var(--secondary-text-color); opacity:.8; line-height:1.1; white-space:nowrap; }
 .heater-val { color:#a78bfa; }
 .stat-icon { color:var(--secondary-text-color); line-height:1; opacity:.7; text-align:center;}
-.stat-val { font-family:'Share Tech Mono',monospace; font-size:.85rem; font-weight:600; color:var(--primary-text-color); text-align:center;}
+.stat-val { font-family:'Share Tech Mono',monospace; font-size:.85em; font-weight:600; color:var(--primary-text-color); text-align:center;}
 .hotend-val { color:#ff8c66; }
 .bed-val    { color:#66b2ff; }
-.stat-label { font-size:.64rem; color:var(--secondary-text-color); opacity:.7; text-transform:uppercase; letter-spacing:.05em; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+.stat-label { font-size:.64em; color:var(--secondary-text-color); opacity:.7; text-transform:uppercase; letter-spacing:.05em; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 
 /* ── Separator ── */
 .sep { height:1px; background:var(--divider-color,rgba(255,255,255,.08)); margin:8px 0; }
@@ -2231,19 +2233,19 @@ class PrinterCard3D extends HTMLElement {
 .tile-job { grid-column:span 2; flex-direction:row; align-items:center; gap:14px; padding:10px 14px; }
 .job-rows { flex:1; display:flex; flex-direction:column; gap:6px; min-width:0; }
 .job-row { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
-.job-label { font-size:.68rem; color:var(--secondary-text-color); opacity:.7; text-transform:uppercase; letter-spacing:.06em; }
-.job-val { font-size:.92rem; font-weight:600; color:var(--primary-text-color); white-space:nowrap; }
-.job-sub { font-size:.75rem; font-weight:400; color:var(--secondary-text-color); }
+.job-label { font-size:.68em; color:var(--secondary-text-color); opacity:.7; text-transform:uppercase; letter-spacing:.06em; }
+.job-val { font-size:.92em; font-weight:600; color:var(--primary-text-color); white-space:nowrap; }
+.job-sub { font-size:.82em; font-weight:400; color:var(--secondary-text-color); }
 .tile-arc { flex-shrink:0; }
 .tile-info { display:flex; flex-direction:column; gap:2px; }
-.tile-primary { font-family:'Share Tech Mono',monospace; font-size:1.4rem; font-weight:700; color:var(--mode-color); }
-.tile-secondary { font-size:.78rem; color:var(--secondary-text-color); opacity:.75; }
+.tile-primary { font-family:'Share Tech Mono',monospace; font-size:1.4em; font-weight:700; color:var(--mode-color); }
+.tile-secondary { font-size:.78em; color:var(--secondary-text-color); opacity:.75; }
 .tile-icon { color:var(--mode-color); opacity:.8; line-height:1; }
-.tile-label { font-size:.68rem; color:var(--secondary-text-color); opacity:.65; text-transform:uppercase; letter-spacing:.06em; }
-.tile-value { font-size:.88rem; font-weight:600; margin-top:2px; }
-.tile-sub { font-size:.72rem; color:var(--secondary-text-color); opacity:.65; }
+.tile-label { font-size:.68em; color:var(--secondary-text-color); opacity:.65; text-transform:uppercase; letter-spacing:.06em; }
+.tile-value { font-size:.88em; font-weight:600; margin-top:2px; }
+.tile-sub { font-size:.72em; color:var(--secondary-text-color); opacity:.65; }
 .tile-filename { overflow:hidden; }
-.filename { font-size:.78rem; font-family:'Share Tech Mono',monospace; word-break:break-all; }
+.filename { font-size:.89em; font-family:'Share Tech Mono',monospace; word-break:break-all; }
 
 /* ── File tile with thumbnail ── */
 .tile-file { grid-column: span 2; flex-direction: row; align-items: center; gap: 10px; }
@@ -2265,7 +2267,7 @@ class PrinterCard3D extends HTMLElement {
 
 /* ── Controls ── */
 .controls { display:grid; grid-template-columns:repeat(auto-fit, minmax(68px, 1fr)); gap:8px; margin:8px 0; }
-.ctrl-btn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:10px 4px; border-radius:10px; min-width:0; border:none; cursor:pointer; font-family:var(--primary-font-family,Roboto,sans-serif); font-size:.82rem; font-weight:600; transition:all .18s; background:var(--secondary-background-color,rgba(255,255,255,.06)); color:var(--primary-text-color); }
+.ctrl-btn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:7px 4px; border-radius:10px; min-width:0; border:none; cursor:pointer; font-family:var(--primary-font-family,Roboto,sans-serif); font-size:.82em; font-weight:600; transition:all .18s; background:var(--secondary-background-color,rgba(255,255,255,.06)); color:var(--primary-text-color); }
 .ctrl-btn:hover { filter:brightness(1.2); }
 .ctrl-btn:active { transform:scale(0.97); }
 .ctrl-pause    { background:rgba(229,192,0,.15); color:#e5c000; border:1px solid rgba(229,192,0,.3); }
@@ -2277,9 +2279,9 @@ class PrinterCard3D extends HTMLElement {
 @keyframes pulse-red { 0%,100% { box-shadow:0 0 0 0 rgba(244,67,54,.5); } 50% { box-shadow:0 0 0 6px rgba(244,67,54,0); } }
 
 /* ── Camera button ── */
-.camera-btn { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:10px; margin-top:4px; border-radius:10px; border:1px solid var(--divider-color,rgba(255,255,255,.1)); background:var(--secondary-background-color,rgba(255,255,255,.04)); color:var(--primary-text-color); cursor:pointer; font-family:var(--primary-font-family,Roboto,sans-serif); font-size:.88rem; font-weight:600; transition:all .18s; }
+.camera-btn { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:8px 12px; margin-top:4px; border-radius:10px; border:1px solid var(--divider-color,rgba(255,255,255,.1)); background:var(--secondary-background-color,rgba(255,255,255,.04)); color:var(--primary-text-color); cursor:pointer; font-family:var(--primary-font-family,Roboto,sans-serif); font-size:.88em; font-weight:600; transition:all .18s; }
 .camera-btn:hover, .camera-btn.active { background:var(--chip-bg); border-color:var(--mode-color); color:var(--mode-color); }
-.cam-badge { background:var(--mode-color); color:var(--card-background-color,#1c1c1e); border-radius:10px; font-size:.72rem; font-weight:700; padding:1px 7px; min-width:18px; text-align:center; }
+.cam-badge { background:var(--mode-color); color:var(--card-background-color,#1c1c1e); border-radius:10px; font-size:.72em; font-weight:700; padding:1px 7px; min-width:18px; text-align:center; }
 .cam-chevron { margin-left:auto; display:flex; align-items:center; transition:transform .25s cubic-bezier(.4,0,.2,1); }
 .cam-chevron.open { transform:rotate(180deg); }
 .cameras-section { overflow:hidden; max-height:0; transition:max-height .4s cubic-bezier(.4,0,.2,1); }
@@ -2293,13 +2295,13 @@ class PrinterCard3D extends HTMLElement {
 .sheet { position:absolute; left:0; right:0; bottom:0; background:var(--card-background-color,#1c1c1e); border-radius:16px 16px 0 0; padding:12px 16px 24px; z-index:20; transform:translateY(100%); transition:transform .3s cubic-bezier(.4,0,.2,1); box-shadow:0 -4px 24px rgba(0,0,0,.4); max-height:72vh; display:flex; flex-direction:column; }
 .sheet.open { transform:translateY(0); }
 .sheet-handle { width:36px; height:4px; background:var(--divider-color,rgba(255,255,255,.15)); border-radius:2px; margin:0 auto 12px; flex-shrink:0; }
-.sheet-title { display:flex; align-items:center; gap:8px; font-size:.95rem; font-weight:600; margin-bottom:16px; color:var(--mode-color); flex-shrink:0; }
+.sheet-title { display:flex; align-items:center; gap:8px; font-size:.95em; font-weight:600; margin-bottom:16px; color:var(--mode-color); flex-shrink:0; }
 .sheet-scroll { flex:1; overflow-y:auto; padding-bottom:20px; }
 
 /* ── Camera views ── */
 .camera-views { display:flex; flex-direction:column; gap:12px; padding-top:8px; }
 .cam-view { border-radius:10px; overflow:hidden; background:rgba(0,0,0,.3); }
-.cam-label { font-size:.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--secondary-text-color); padding:6px 10px 4px; opacity:.7; }
+.cam-label { font-size:.72em; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--secondary-text-color); padding:6px 10px 4px; opacity:.7; }
 .cam-stream-wrap { overflow:hidden; border-radius:0 0 10px 10px; aspect-ratio:16/9; background:#000; position:relative; }
 .cam-stream { display:block; width:100%; height:100%; transform:rotate(var(--cam-rotate,0deg)); transform-origin:center center; }
 .cam-stream-wrap[style*="90deg"] .cam-stream, .cam-stream-wrap[style*="270deg"] .cam-stream { transform:rotate(var(--cam-rotate,0deg)) scale(1.78); }
@@ -2308,28 +2310,28 @@ class PrinterCard3D extends HTMLElement {
 .tune-rows { display:flex; flex-direction:column; gap:16px; }
 .tune-row {}
 .tune-row-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
-.tune-row-label { display:flex; align-items:center; gap:6px; font-size:.85rem; font-weight:600; color:var(--secondary-text-color); }
-.tune-row-val { font-size:.88rem; font-weight:700; color:var(--mode-color); }
+.tune-row-label { display:flex; align-items:center; gap:6px; font-size:.85em; font-weight:600; color:var(--secondary-text-color); }
+.tune-row-val { font-size:.88em; font-weight:700; color:var(--mode-color); }
 .tune-slider { width:99%; appearance:none; height:4px; border-radius:2px; background:var(--divider-color,rgba(255,255,255,.15)); outline:none; cursor:pointer; accent-color:var(--mode-color); }
 .tune-slider::-webkit-slider-thumb { appearance:none; width:18px; height:18px; border-radius:50%; background:var(--mode-color); cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.4); }
 
 /* ── Macros sheet ── */
 .macro-list { display:flex; flex-direction:column; gap:6px; max-height:55vh; overflow-y:auto; }
-.macro-btn { display:flex; align-items:center; gap:8px; width:100%; padding:10px 14px; border-radius:8px; border:1px solid var(--divider-color,rgba(255,255,255,.1)); background:var(--secondary-background-color,rgba(255,255,255,.04)); color:var(--primary-text-color); cursor:pointer; font-family:var(--primary-font-family,Roboto,sans-serif); font-size:.85rem; font-weight:600; text-align:left; transition:all .18s; }
+.macro-btn { display:flex; align-items:center; gap:8px; width:100%; padding:10px 14px; border-radius:8px; border:1px solid var(--divider-color,rgba(255,255,255,.1)); background:var(--secondary-background-color,rgba(255,255,255,.04)); color:var(--primary-text-color); cursor:pointer; font-family:var(--primary-font-family,Roboto,sans-serif); font-size:.85em; font-weight:600; text-align:left; transition:all .18s; }
 .macro-btn:hover { background:var(--chip-bg); border-color:var(--mode-color); color:var(--mode-color); }
 .macro-btn:active { transform:scale(0.98); }
 
 /* ── Movement sheet ── */
 .pos-bar { display:flex; gap:16px; margin-bottom:14px; padding:8px 12px; background:var(--secondary-background-color,rgba(255,255,255,.04)); border-radius:8px; }
 .pos-item { display:flex; align-items:center; gap:6px; }
-.pos-axis { font-size:.75rem; font-weight:700; padding:2px 5px; border-radius:4px; }
+.pos-axis { font-size:.75em; font-weight:700; padding:2px 5px; border-radius:4px; }
 .pos-x { background:rgba(244,67,54,.2); color:#f44336; }
 .pos-y { background:rgba(76,175,80,.2); color:#4caf50; }
 .pos-z { background:rgba(33,150,243,.2); color:#2196f3; }
-.pos-val { font-size:.85rem; font-weight:600; }
+.pos-val { font-size:.85em; font-weight:600; }
 
 .home-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
-.home-btn { display:flex; align-items:center; gap:5px; padding:7px 12px; border-radius:8px; border:1px solid var(--divider-color,rgba(255,255,255,.1)); background:var(--secondary-background-color,rgba(255,255,255,.04)); color:var(--primary-text-color); cursor:pointer; font-family:var(--primary-font-family,Roboto,sans-serif); font-size:.82rem; font-weight:600; transition:all .18s; }
+.home-btn { display:flex; align-items:center; gap:5px; padding:7px 12px; border-radius:8px; border:1px solid var(--divider-color,rgba(255,255,255,.1)); background:var(--secondary-background-color,rgba(255,255,255,.04)); color:var(--primary-text-color); cursor:pointer; font-family:var(--primary-font-family,Roboto,sans-serif); font-size:.82em; font-weight:600; transition:all .18s; }
 .home-btn:hover { background:var(--chip-bg); border-color:var(--mode-color); color:var(--mode-color); }
 .home-x { color:#f44336; border-color:rgba(244,67,54,.3); background:rgba(244,67,54,.08); }
 .home-y { color:#4caf50; border-color:rgba(76,175,80,.3); background:rgba(76,175,80,.08); }
@@ -2342,10 +2344,10 @@ class PrinterCard3D extends HTMLElement {
 .jog-center { display:flex; align-items:center; justify-content:center; width:36px; height:36px; opacity:.4; flex-shrink:0; }
 
 .jog-z { display:flex; flex-direction:column; gap:4px; align-items:center; width:52px; flex-shrink:0; }
-.jog-z-label { font-size:.75rem; font-weight:700; padding:2px 8px; border-radius:4px; background:rgba(33,150,243,.2); color:#2196f3; margin-bottom:2px; }
+.jog-z-label { font-size:.75em; font-weight:700; padding:2px 8px; border-radius:4px; background:rgba(33,150,243,.2); color:#2196f3; margin-bottom:2px; }
 .jog-z-sep { height:4px; }
 
-.jog-btn { padding:5px 7px; border-radius:6px; border:1px solid var(--divider-color,rgba(255,255,255,.1)); background:var(--secondary-background-color,rgba(255,255,255,.04)); color:var(--primary-text-color); cursor:pointer; font-family:'Share Tech Mono',monospace; font-size:.72rem; font-weight:600; transition:all .15s; min-width:32px; text-align:center; }
+.jog-btn { padding:5px 7px; border-radius:6px; border:1px solid var(--divider-color,rgba(255,255,255,.1)); background:var(--secondary-background-color,rgba(255,255,255,.04)); color:var(--primary-text-color); cursor:pointer; font-family:'Share Tech Mono',monospace; font-size:.72em; font-weight:600; transition:all .15s; min-width:32px; text-align:center; }
 .jog-btn:hover { background:var(--chip-bg); border-color:var(--mode-color); color:var(--mode-color); }
 .jog-btn:active { transform:scale(0.95); }
 .jog-z-btn { width:100%; }
@@ -2353,32 +2355,32 @@ class PrinterCard3D extends HTMLElement {
 
 /* ── Temps & Fans sheet ── */
 .temps-body { display:flex; flex-direction:column; gap:0; }
-.temps-section-label { font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--secondary-text-color); opacity:.6; margin-bottom:6px; }
+.temps-section-label { font-size:.68em; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--secondary-text-color); opacity:.6; margin-bottom:6px; }
 
 .temp-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:7px 0; border-bottom:1px solid var(--divider-color,rgba(255,255,255,.06)); }
 .temp-row-info { display:flex; flex-direction:column; gap:1px; min-width:0; }
-.temp-row-name { font-size:.85rem; font-weight:600; }
-.temp-row-state { font-size:.7rem; color:var(--secondary-text-color); opacity:.6; text-transform:uppercase; }
+.temp-row-name { font-size:.85em; font-weight:600; }
+.temp-row-state { font-size:.7em; color:var(--secondary-text-color); opacity:.6; text-transform:uppercase; }
 .temp-state-active { color:#ff8c66; opacity:1; }
-.temp-arrow { font-size:.75rem; color:var(--secondary-text-color); opacity:.4; }
+.temp-arrow { font-size:.75em; color:var(--secondary-text-color); opacity:.4; }
 .temp-row-ctrl { display:flex; align-items:center; gap:6px; flex-shrink:0; }
-.temp-current { font-size:.85rem; color:var(--mode-color); min-width:42px; text-align:right; }
-.temp-input { width:52px; padding:4px 6px; border-radius:6px; border:1px solid var(--divider-color,rgba(255,255,255,.15)); background:var(--secondary-background-color,rgba(255,255,255,.06)); color:var(--primary-text-color); font-family:'Share Tech Mono',monospace; font-size:.85rem; text-align:center; outline:none; }
+.temp-current { font-size:.85em; color:var(--mode-color); min-width:42px; text-align:right; }
+.temp-input { width:52px; padding:4px 6px; border-radius:6px; border:1px solid var(--divider-color,rgba(255,255,255,.15)); background:var(--secondary-background-color,rgba(255,255,255,.06)); color:var(--primary-text-color); font-family:'Share Tech Mono',monospace; font-size:.85em; text-align:center; outline:none; }
 .temp-input:focus { border-color:var(--mode-color); }
-.temp-unit { font-size:.75rem; color:var(--secondary-text-color); opacity:.6; }
+.temp-unit { font-size:.75em; color:var(--secondary-text-color); opacity:.6; }
 
 .fan-row { padding:8px 0; border-bottom:1px solid var(--divider-color,rgba(255,255,255,.06)); }
 .fan-row-info { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
-.fan-name { font-size:.85rem; font-weight:600; }
-.fan-val { font-size:.82rem; color:var(--mode-color); }
+.fan-name { font-size:.85em; font-weight:600; }
+.fan-val { font-size:.82em; color:var(--mode-color); }
 
 /* ── System sheet ── */
 .system-body { display:flex; flex-direction:column; gap:6px; }
-.sys-section-label { font-size:.7rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--secondary-text-color); opacity:.55; margin-top:10px; margin-bottom:2px; padding:0 2px; }
+.sys-section-label { font-size:.7em; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--secondary-text-color); opacity:.55; margin-top:10px; margin-bottom:2px; padding:0 2px; }
 .sys-section-label:first-child { margin-top:0; }
-.system-warning { font-size:.75rem; color:var(--secondary-text-color); opacity:.65; margin-bottom:4px; padding:7px 10px; border-radius:6px; background:rgba(244,67,54,.06); border:1px solid rgba(244,67,54,.15); }
+.system-warning { font-size:.75em; color:var(--secondary-text-color); opacity:.65; margin-bottom:4px; padding:7px 10px; border-radius:6px; background:rgba(244,67,54,.06); border:1px solid rgba(244,67,54,.15); }
 .ctrl-system { background:rgba(244,67,54,.08); color:#ff6b6b; border:1px solid rgba(244,67,54,.2); }
-.system-btn { display:flex; align-items:center; gap:8px; width:100%; padding:10px 14px; border-radius:8px; border:1px solid rgba(var(--rgb-primary-text-color,200,200,200),.12); background:rgba(var(--rgb-primary-text-color,200,200,200),.05); color:var(--primary-text-color); cursor:pointer; font-family:var(--primary-font-family,Roboto,sans-serif); font-size:.85rem; font-weight:500; text-align:left; transition:all .18s; }
+.system-btn { display:flex; align-items:center; gap:8px; width:100%; padding:10px 14px; border-radius:8px; border:1px solid rgba(var(--rgb-primary-text-color,200,200,200),.12); background:rgba(var(--rgb-primary-text-color,200,200,200),.05); color:var(--primary-text-color); cursor:pointer; font-family:var(--primary-font-family,Roboto,sans-serif); font-size:.85em; font-weight:500; text-align:left; transition:all .18s; }
 .system-btn:hover { background:rgba(var(--rgb-primary-text-color,200,200,200),.1); }
 .system-btn:active { transform:scale(0.98); }
 .system-btn-service { color:var(--secondary-text-color); font-weight:400; }
