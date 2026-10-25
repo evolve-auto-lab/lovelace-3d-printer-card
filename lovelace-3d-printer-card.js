@@ -28,6 +28,8 @@
 // =============================================================================
 
 const CARD_TAG = 'lovelace-3d-printer-card';
+const CARD_VERSION = '1.2.0';
+console.info(`%c 3D-PRINTER-CARD %c v${CARD_VERSION} `, 'color:#fff;background:#4caf50;font-weight:700', 'color:#4caf50;background:#1c1c1e');
 
 // ── Default entity mappings (fallback when fetch fails) ────────────────────────
 const DEFAULT_MAPPINGS = {
