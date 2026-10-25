@@ -49,6 +49,16 @@ export default {
   hidden_roles: ["file_size"],
   // Unclaimed sensors matching these (suffix after base_entity) are not listed as heaters
   ignore: ["^target_"],
+  // Friendly names for Prusa firmware's extra M105 readings (from Prusa-Firmware-Buddy
+  // temperature.cpp). Matched against the entity suffix; first match wins.
+  // {n} = captured index, {n1} = index + 1 (tools are numbered from 1 on the printer).
+  labels: [
+    { match: "^actual_a_temp$", label: "Mainboard" },
+    { match: "^actual_w_temp$", label: "Bed settle timer", unit: "s" },
+    { match: "^actual_x5_temp$", label: "Heatbreak (no tool)" },
+    { match: "^actual_x(\\d+)_temp$", label: "Tool {n1} heatbreak" },
+    { match: "^actual_chamber_temp$", label: "Chamber" }
+  ],
   // Prusa XL reports its 16 heatbed tiles as B_<x>_<y>
   bed_segments: "actual_b_{x}_{y}_temp",
   // Multi-tool discovery. {n} is the zero-based tool index.

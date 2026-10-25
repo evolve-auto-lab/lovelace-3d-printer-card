@@ -107,6 +107,13 @@ const BUILTIN_MAPPINGS = {
     camera: [["thumbnail", ["thumbnail", "job_preview"]]],
     hidden_roles: ["file_size"],
     ignore: ["^target_"],
+    labels: [
+      { match: "^actual_a_temp$", label: "Mainboard" },
+      { match: "^actual_w_temp$", label: "Bed settle timer", unit: "s" },
+      { match: "^actual_x5_temp$", label: "Heatbreak (no tool)" },
+      { match: "^actual_x(\\d+)_temp$", label: "Tool {n1} heatbreak" },
+      { match: "^actual_chamber_temp$", label: "Chamber" }
+    ],
     bed_segments: "actual_b_{x}_{y}_temp",
     tools: {
       actual: "actual_tool{n}_temp",
@@ -1147,7 +1154,20 @@ class PrinterCard3D extends HTMLElement {
       if (coreTargets.has(targetId)) continue; // alias of hotend/bed
 
       const targetSt = this._hass.states[targetId];
-      const lbl = label(st, sensorId);
+      let lbl = label(st, sensorId);
+      let hint = null;
+      let unit = '°';
+      for (const r of (m.labels || [])) {
+        const mm = suffix.match(new RegExp(r.match));
+        if (!mm) continue;
+        const fill = (str) => str == null ? null : str
+          .replace(/\{n1\}/g, mm[1] != null ? String(parseInt(mm[1], 10) + 1) : '')
+          .replace(/\{n\}/g, mm[1] ?? '');
+        lbl = fill(r.label) ?? lbl;
+        hint = fill(r.hint);
+        if (r.unit != null) unit = r.unit;
+        break;
+      }
 
       if (targetSt) {
         tempTargetIds.add(targetId);
@@ -1160,6 +1180,8 @@ class PrinterCard3D extends HTMLElement {
           max_temp: parseFloat(targetSt.attributes?.max ?? 300),
           target_entity: targetId,
           readonly: false,
+          hint,
+          unit,
         });
       } else {
         this._heaters.push({
@@ -1171,6 +1193,8 @@ class PrinterCard3D extends HTMLElement {
           max_temp: null,
           target_entity: null,
           readonly: true,
+          hint,
+          unit,
         });
       }
     }
@@ -1821,10 +1845,11 @@ class PrinterCard3D extends HTMLElement {
           ${this._heaters.filter(h => !h.readonly).map(h => `<div class="temp-row">
             <div class="temp-row-info">
               <span class="temp-row-name">${h.label}</span>
+              ${h.hint ? `<span class="temp-row-hint">${h.hint}</span>` : ''}
               ${h.state != null ? `<span class="temp-row-state ${h.state !== 'off' ? 'temp-state-active' : ''}">${h.state}</span>` : ''}
             </div>
             <div class="temp-row-ctrl">
-              <span class="temp-current mono">${h.current != null ? h.current.toFixed(1) + '°' : '—'}</span>
+              <span class="temp-current mono">${h.current != null ? (h.unit === '°' ? h.current.toFixed(1) + '°' : `${Math.round(h.current)} ${h.unit}`) : '—'}</span>
               ${h.readonly ? '' : `
               <span class="temp-arrow">→</span>
               <input type="number" class="temp-input"
@@ -1841,10 +1866,11 @@ class PrinterCard3D extends HTMLElement {
           ${this._heaters.filter(h => h.readonly).map(h => `<div class="temp-row">
             <div class="temp-row-info">
               <span class="temp-row-name">${h.label}</span>
+              ${h.hint ? `<span class="temp-row-hint">${h.hint}</span>` : ''}
               ${h.state != null ? `<span class="temp-row-state ${h.state !== 'off' ? 'temp-state-active' : ''}">${h.state}</span>` : ''}
             </div>
             <div class="temp-row-ctrl">
-              <span class="temp-current mono">${h.current != null ? h.current.toFixed(1) + '°' : '—'}</span>
+              <span class="temp-current mono">${h.current != null ? (h.unit === '°' ? h.current.toFixed(1) + '°' : `${Math.round(h.current)} ${h.unit}`) : '—'}</span>
               ${h.readonly ? '' : `
               <span class="temp-arrow">→</span>
               <input type="number" class="temp-input"
@@ -2170,6 +2196,7 @@ class PrinterCard3D extends HTMLElement {
   border: 1px solid var(--divider-color, rgba(255,255,255,.08));
 }
 .bed-cell-na { opacity: 0.4; }
+.temp-row-hint { display:block; font-size:.72em; color:var(--secondary-text-color); opacity:.75; margin-top:1px; }
 .bed-avg { font-weight: 400; opacity: 0.7; margin-left: 6px; text-transform: none; }
 
 .card {
