@@ -18,7 +18,7 @@ Key features at a glance:
 - **Misc sheet** — settable heaters with temperature inputs, fan/output sliders
 - **System sheet** (⋯ More) — firmware restart, host restart, server restart
 - **Camera section** — auto-discovered, collapsible, live streaming via `<ha-camera-stream>`
-- **Device author:** [gil](https://github.com/gilbertorconde) — 2026
+- **Original author:** [gil](https://github.com/gilbertorconde) — 2026 ([upstream repo](https://github.com/gilbertorconde/lovelace-3d-printer-card)). This fork adds OctoPrint, PrusaLink and Prusa XL multi-tool support.
 
 ---
 
@@ -56,15 +56,15 @@ Key features at a glance:
 
 1. In Home Assistant, open **HACS → Frontend**.
 2. Click the three-dot menu (⋮) in the top-right and choose **Custom repositories**.
-3. Paste `https://github.com/gilbertorconde/lovelace-3d-printer-card` and select **Dashboard** as the category.
+3. Paste `https://github.com/evolve-auto-lab/lovelace-3d-printer-card` and select **Dashboard** as the category.
 4. Click **Add**, then search for **Lovelace 3D Printer Card** and install it.
 5. Reload your browser / clear the cache.
 
-[![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=gilbertorconde&repository=lovelace-3d-printer-card&category=dashboard)
+[![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=evolve-auto-lab&repository=lovelace-3d-printer-card&category=dashboard)
 
 ### Option B — Manual
 
-1. Download `lovelace-3d-printer-card.js` and the `entities/` folder from the [latest release](https://github.com/gilbertorconde/lovelace-3d-printer-card/releases/latest).
+1. Download `lovelace-3d-printer-card.js` and the `entities/` folder from this repository.
 2. Copy the card to `/config/www/lovelace-3d-printer-card/lovelace-3d-printer-card.js` and the `entities/` folder to `/config/www/lovelace-3d-printer-card/entities/`.
 3. In **Settings → Dashboards → Resources**, add each file as a resource (type: **JavaScript Module**). Click **Add resource**, enter the URL, then add the next:
    - `/local/lovelace-3d-printer-card/lovelace-3d-printer-card.js` (the card)
